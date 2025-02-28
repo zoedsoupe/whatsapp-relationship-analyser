@@ -1,0 +1,133 @@
+# WhatsApp Relationship Analyzer
+
+## Setup
+
+> **Important**: To run this notebook properly:
+> 
+> 1. Click the Settings (⚙️) button in the top right
+> 2. Under "Runtime," select "Mix standalone"
+> 3. For the "Path to mix project," enter the path to the root of this repository
+> 4. Click "Apply changes"
+
+## Analysis
+
+```elixir
+# Set up aliases for visualization
+alias VegaLite, as: Vl
+alias Kino.VegaLite, as: KVl
+
+# Create a form with file input
+form = Kino.Control.form(
+  [
+    file: Kino.Input.file("Upload WhatsApp Chat Export (.txt)")
+  ],
+  submit: "Analyze Chat"
+)
+
+# Render the form
+Kino.render(form)
+
+# Create a frame to display results
+result_frame = Kino.Frame.new()
+Kino.render(result_frame)
+
+# Handle form submission
+Kino.listen(form, fn %{data: %{file: file}} ->
+  if file do
+    # Get file content using the appropriate Kino function
+    path = Kino.Input.file_path(file.file_ref)
+    
+    
+    # Run the analysis
+    Kino.Frame.render(result_frame, Kino.Markdown.new("Analyzing chat file... This may take a moment."))
+    
+    try do
+      # Run the analysis
+      analysis = WhatsAppAnalyzer.analyze_chat(path)
+      
+      # Display summary
+      summary = WhatsAppAnalyzer.summarize_relationship(analysis)
+      
+      summary_text = """
+      # Relationship Analysis Summary
+      
+      **Classification:** #{summary.classification}
+      **Confidence Score:** #{summary.confidence_score}%
+      **Total Messages:** #{summary.message_count}
+      **Time Span:** #{Float.round(summary.time_span_days, 1)} days
+      
+      ## Key Indicators
+      #{Enum.map(summary.primary_indicators, fn {indicator, score} -> "- #{indicator}: #{score}%" end) |> Enum.join("\n")}
+      """
+      
+      Kino.Frame.render(result_frame, Kino.Markdown.new(summary_text))
+      
+      # Display visualizations
+      Kino.Frame.append(result_frame, Kino.Markdown.new("## Message Frequency Over Time"))
+      Kino.Frame.append(result_frame, KVl.new(analysis.visualizations.message_frequency))
+      
+      Kino.Frame.append(result_frame, Kino.Markdown.new("## Messages by Sender"))
+      Kino.Frame.append(result_frame, KVl.new(analysis.visualizations.sender_distribution))
+      
+      Kino.Frame.append(result_frame, Kino.Markdown.new("## Activity Heatmap by Time of Day"))
+      Kino.Frame.append(result_frame, KVl.new(analysis.visualizations.time_heatmap))
+      
+      Kino.Frame.append(result_frame, Kino.Markdown.new("## Relationship Indicators"))
+      Kino.Frame.append(result_frame, KVl.new(analysis.visualizations.relationship_radar))
+      
+      Kino.Frame.append(result_frame, Kino.Markdown.new("## Classification Confidence"))
+      Kino.Frame.append(result_frame, KVl.new(analysis.visualizations.classification))
+      
+      # Display detailed statistics
+      Kino.Frame.append(result_frame, Kino.Markdown.new("## Detailed Statistics"))
+      
+      # Show top romantic indicators
+      romantic_indicators = analysis.analysis.romantic_indicators
+      
+      romantic_text = """
+      ### Romantic Language
+      - Total romantic indicators: #{romantic_indicators.total_indicators}
+      - Percentage of messages with romantic language: #{romantic_indicators.percentage_of_messages}%
+      """
+      
+      Kino.Frame.append(result_frame, Kino.Markdown.new(romantic_text))
+      
+      # Show conversation initiation statistics
+      initiations = analysis.analysis.conversation_initiation
+      
+      initiation_text = """
+      ### Conversation Patterns
+      - Total conversations: #{initiations.total_conversations}
+      - Conversation initiations by sender:
+      #{Enum.map(initiations.initiation_percentage, fn {sender, percentage} -> "  - #{sender}: #{percentage}%" end) |> Enum.join("\n")}
+      """
+      
+      Kino.Frame.append(result_frame, Kino.Markdown.new(initiation_text))
+      
+      # Show time-based patterns
+      time_patterns = analysis.analysis.time_of_day_patterns
+      
+      time_text = """
+      ### Time Patterns
+      - Most active time period: #{Enum.max_by(time_patterns.percentage_by_period, fn {_, v} -> v end) |> elem(0)}
+      - Weekend vs Weekday: #{Float.round(analysis.analysis.day_of_week_patterns.weekday_vs_weekend.weekend_percentage, 1)}% weekend, #{Float.round(analysis.analysis.day_of_week_patterns.weekday_vs_weekend.weekday_percentage, 1)}% weekday
+      """
+      
+      Kino.Frame.append(result_frame, Kino.Markdown.new(time_text))
+      
+    rescue
+      e ->
+        error_message = """
+        Error analyzing chat: #{inspect(e)}
+        
+        Stack trace:
+        #{Exception.format_stacktrace(__STACKTRACE__)}
+        """
+        
+        Kino.Frame.render(result_frame, Kino.Markdown.new(error_message))
+    end
+  else
+    Kino.Frame.render(result_frame, Kino.Markdown.new("Please upload a WhatsApp chat export file first."))
+  end
+end)
+```

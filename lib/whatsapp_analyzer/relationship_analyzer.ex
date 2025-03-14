@@ -201,8 +201,8 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
     %{
       first_message: first_date,
       last_message: last_date,
-      days: Float.round(days, 1),
-      months: Float.round(days / 30, 1)
+      days: round(days),
+      months: round(days / 30)
     }
   end
 
@@ -219,7 +219,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
       |> Map.new()
 
     %{
-      messages_per_day: Float.round(messages_per_day, 2),
+      messages_per_day: round(messages_per_day),
       by_sender: messages_by_sender
     }
   end
@@ -276,7 +276,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
     initiation_percentage =
       initiations
       |> Enum.map(fn {sender, count} ->
-        {sender, Float.round(count / total_conversations * 100, 1)}
+        {sender, round(count / total_conversations * 100)}
       end)
       |> Map.new()
 
@@ -322,7 +322,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
     %{
       total_indicators: total_indicators,
       by_sender: indicators_by_sender,
-      percentage_of_messages: Float.round(indicator_percentage, 1)
+      percentage_of_messages: round(indicator_percentage)
     }
   end
 
@@ -361,7 +361,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
     percentage_distribution =
       time_distribution
       |> Enum.map(fn {period, count} ->
-        {period, Float.round(count / total * 100, 1)}
+        {period, round(count / total * 100)}
       end)
       |> Map.new()
 
@@ -401,7 +401,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
     percentage_distribution =
       day_distribution
       |> Enum.map(fn {day, count} ->
-        {day, Float.round(count / total * 100, 1)}
+        {day, round(count / total * 100)}
       end)
       |> Map.new()
 
@@ -417,8 +417,8 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
       weekday_vs_weekend: %{
         weekday: weekday_count,
         weekend: weekend_count,
-        weekday_percentage: Float.round(weekday_count / total * 100, 1),
-        weekend_percentage: Float.round(weekend_count / total * 100, 1)
+        weekday_percentage: round(weekday_count / total * 100),
+        weekend_percentage: round(weekend_count / total * 100)
       }
     }
   end

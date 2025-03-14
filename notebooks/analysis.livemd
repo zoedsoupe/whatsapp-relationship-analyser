@@ -10,7 +10,7 @@ Mix.install([
   {:kino_vega_lite, "~> 0.1"},
   {:vega_lite, "~> 0.1"},
   {:stemmer, "~> 1.2"},
-  {:whatsapp_analyser, github: "zoedsoupe/whatsapp-relationship-analyser", rev: "b57d012289f8bf043542e3979292d4d4d8e20799"}
+  {:whatsapp_analyser, github: "zoedsoupe/whatsapp-relationship-analyser", branch: "main"}
 ])
 ```
 
@@ -68,7 +68,7 @@ Kino.listen(form, fn %{data: %{file: file}} ->
       **Classification:** #{summary.classification}
       **Confidence Score:** #{summary.confidence_score}%
       **Total Messages:** #{summary.message_count}
-      **Time Span:** #{Float.round(summary.time_span_days, 1)} days
+      **Time Span:** #{round(summary.time_span_days)} days
       
       ## Key Indicators
       #{Enum.map(summary.primary_indicators, fn {indicator, score} -> "- #{indicator}: #{score}%" end) |> Enum.join("\n")}
@@ -124,7 +124,7 @@ Kino.listen(form, fn %{data: %{file: file}} ->
       time_text = """
       ### Time Patterns
       - Most active time period: #{Enum.max_by(time_patterns.percentage_by_period, fn {_, v} -> v end) |> elem(0)}
-      - Weekend vs Weekday: #{Float.round(analysis.analysis.day_of_week_patterns.weekday_vs_weekend.weekend_percentage, 1)}% weekend, #{Float.round(analysis.analysis.day_of_week_patterns.weekday_vs_weekend.weekday_percentage, 1)}% weekday
+      - Weekend vs Weekday: #{round(analysis.analysis.day_of_week_patterns.weekday_vs_weekend.weekend_percentage)}% weekend, #{round(analysis.analysis.day_of_week_patterns.weekday_vs_weekend.weekday_percentage)}% weekday
       """
       
       Kino.Frame.append(result_frame, Kino.Markdown.new(time_text))

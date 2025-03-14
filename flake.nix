@@ -1,11 +1,15 @@
 {
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs = {nixpkgs, ...}: let
     inherit (nixpkgs.lib) genAttrs;
     inherit (nixpkgs.lib.systems) flakeExposed;
     forAllSystems = f:
-      genAttrs flakeExposed (system: f (import nixpkgs {inherit system;}));
+      genAttrs flakeExposed (system:
+        f (import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+        }));
   in {
     devShells = forAllSystems (pkgs: let
       inherit (pkgs) mkShell;
@@ -25,7 +29,7 @@
     in {
       default = mkShell {
         name = "whatsapp-analyzer";
-        packages = [elixir_1_18];
+        packages = [elixir_1_18 pkgs.claude-code];
       };
     });
   };

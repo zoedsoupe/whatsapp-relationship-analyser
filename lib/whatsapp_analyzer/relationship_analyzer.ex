@@ -473,12 +473,12 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
 
     %{
       classification: classification,
-      score: Float.round(weighted_score, 1),
+      score: round(weighted_score),
       component_scores: %{
-        romantic_indicators: Float.round(romantic_normalized, 1),
-        intimacy: Float.round(intimacy_normalized, 1),
-        future_planning: Float.round(future_normalized, 1),
-        messaging_frequency: Float.round(frequency_normalized, 1),
+        romantic_indicators: round(romantic_normalized),
+        intimacy: round(intimacy_normalized),
+        future_planning: round(future_normalized),
+        messaging_frequency: round(frequency_normalized),
         response_time: response_normalized
       }
     }

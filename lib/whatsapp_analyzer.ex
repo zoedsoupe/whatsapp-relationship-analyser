@@ -50,7 +50,7 @@ defmodule WhatsAppAnalyzer do
     scores
     |> Enum.sort_by(fn {_key, value} -> value end, :desc)
     |> Enum.take(2)
-    |> Enum.map(fn {key, value} -> {key, Float.round(value, 1)} end)
+    |> Enum.map(fn {key, value} -> {key, round(value)} end)
     |> Map.new()
   end
 end

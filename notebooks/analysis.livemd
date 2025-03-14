@@ -1,5 +1,19 @@
 # WhatsApp Relationship Analyzer
 
+```elixir
+Mix.install([
+  {:nx, "~> 0.9"},
+  {:axon, "~> 0.7"},
+  {:explorer, "~> 0.10"},
+  {:exla, "~> 0.9"},
+  {:kino, "~> 0.15"},
+  {:kino_vega_lite, "~> 0.1"},
+  {:vega_lite, "~> 0.1"},
+  {:stemmer, "~> 1.2"},
+  {:whatsapp_analyser, github: "zoedsoupe/whatsapp-relationship-analyser", rev: "b57d012289f8bf043542e3979292d4d4d8e20799"}
+])
+```
+
 ## Setup
 
 > **Important**: To run this notebook properly:

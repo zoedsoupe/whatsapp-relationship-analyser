@@ -6,21 +6,23 @@ defmodule WhatsAppAnalyzer do
   with support for both regular and streaming parsing for large files.
   """
 
-  alias WhatsAppAnalyzer.DataProcessor
-  alias WhatsAppAnalyzer.RelationshipAnalyzer
-  alias WhatsAppAnalyzer.Visualization
-  alias WhatsAppAnalyzer.StreamingParser
-  alias WhatsAppAnalyzer.ConversationSegmenter
+  alias WhatsAppAnalyzer.{
+    Config,
+    DataProcessor,
+    RelationshipAnalyzer,
+    Visualization,
+    StreamingParser,
+    ConversationSegmenter
+  }
 
   require Explorer.DataFrame, as: DF
 
-  @large_file_threshold 10_000_000  # 10MB
-  
   @doc """
   Analyzes a WhatsApp chat export file and returns a complete analysis.
 
-  Automatically uses streaming parser for files larger than #{@large_file_threshold} bytes.
+  Automatically uses streaming parser for files larger than 10MB.
   """
+  @spec analyze_chat(Path.t(), keyword()) :: map()
   def analyze_chat(file_path, opts \\ []) do
     processed_data = parse_file(file_path, opts)
 
@@ -60,23 +62,25 @@ defmodule WhatsAppAnalyzer do
   @doc """
   Parses a file using the appropriate parser based on file size.
   """
+  @spec parse_file(Path.t(), keyword()) :: DF.t()
   def parse_file(file_path, opts \\ []) do
     force_streaming = Keyword.get(opts, :streaming, false)
     file_size = File.stat!(file_path).size
 
-    if force_streaming || file_size > @large_file_threshold do
+    if force_streaming || file_size > Config.large_file_threshold() do
       StreamingParser.parse_file_stream(file_path)
     else
       DataProcessor.process_file(file_path)
     end
   end
-  
+
   @doc """
   Returns a brief summary of the relationship analysis.
   """
+  @spec summarize_relationship(map()) :: map()
   def summarize_relationship(analysis) do
     classification = analysis.analysis.relationship_classification
-    
+
     %{
       classification: classification.classification,
       confidence_score: classification.score,
@@ -85,7 +89,8 @@ defmodule WhatsAppAnalyzer do
       primary_indicators: get_primary_indicators(classification.component_scores)
     }
   end
-  
+
+  @spec get_primary_indicators(map()) :: map()
   defp get_primary_indicators(scores) do
     scores
     |> Enum.sort_by(fn {_key, value} -> value end, :desc)

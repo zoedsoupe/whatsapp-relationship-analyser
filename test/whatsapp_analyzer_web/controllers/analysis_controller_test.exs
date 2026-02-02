@@ -14,7 +14,7 @@ defmodule WhatsAppAnalyzerWeb.AnalysisControllerTest do
       conn = post(conn, Routes.analysis_path(conn, :create), %{"upload" => upload})
 
       assert redirected_to(conn) =~ "/results/"
-      assert get_flash(conn, :info) == "Analysis completed successfully!"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Analysis completed successfully!"
     end
 
     test "handles empty file gracefully", %{conn: conn} do
@@ -45,7 +45,7 @@ defmodule WhatsAppAnalyzerWeb.AnalysisControllerTest do
       conn = post(conn, Routes.analysis_path(conn, :create), %{})
 
       assert redirected_to(conn) == Routes.page_path(conn, :index)
-      assert get_flash(conn, :error) == "Please upload a WhatsApp chat export file."
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Please upload a WhatsApp chat export file."
     end
   end
 
@@ -55,7 +55,8 @@ defmodule WhatsAppAnalyzerWeb.AnalysisControllerTest do
       analysis_id = "test_analysis_123"
 
       # Create a minimal VegaLite chart for testing
-      test_chart = VegaLite.new(title: "Test Chart")
+      test_chart =
+        VegaLite.new(title: "Test Chart")
         |> VegaLite.data_from_values([%{x: 1, y: 2}])
         |> VegaLite.mark(:bar)
 
@@ -82,14 +83,15 @@ defmodule WhatsAppAnalyzerWeb.AnalysisControllerTest do
       conn = get(conn, Routes.analysis_path(conn, :show, analysis_id))
 
       assert html_response(conn, 200) =~ "Analysis Results"
-      assert html_response(conn, 200) =~ "10"  # total messages
+      # total messages
+      assert html_response(conn, 200) =~ "10"
     end
 
     test "redirects for invalid ID", %{conn: conn} do
       conn = get(conn, Routes.analysis_path(conn, :show, "nonexistent_id"))
 
       assert redirected_to(conn) == Routes.page_path(conn, :index)
-      assert get_flash(conn, :error) == "Analysis not found or expired."
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Analysis not found or expired."
     end
   end
 end

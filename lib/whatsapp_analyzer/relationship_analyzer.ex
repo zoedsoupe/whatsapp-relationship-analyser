@@ -13,24 +13,21 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
   Analyzes a DF with conversation data to extract relationship indicators.
   Returns a map of analysis results.
   """
+  @spec analyze_relationship(DF.t()) :: map()
   def analyze_relationship(df) do
     df = DF.sort_by(df, datetime)
 
     %{
       total_messages: DF.n_rows(df),
       time_span: get_time_span(df),
-
       messaging_frequency: calculate_messaging_frequency(df),
       response_patterns: analyze_response_patterns(df),
       conversation_initiation: analyze_conversation_initiation(df),
-
       romantic_indicators: AnalysisHelpers.count_indicators(df, Config.romantic_indicators()),
       future_planning: AnalysisHelpers.count_indicators(df, Config.future_planning()),
       intimacy_indicators: AnalysisHelpers.count_indicators(df, Config.intimacy_indicators()),
-
       time_of_day_patterns: analyze_time_of_day(df),
       day_of_week_patterns: analyze_day_of_week(df),
-
       relationship_classification: classify_relationship(df)
     }
   end
@@ -38,35 +35,11 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
   @doc """
   Provides summary metrics for a quick overview of the relationship.
   """
+  @spec relationship_summary(DF.t()) :: map()
   def relationship_summary(df) do
-    senders =
-      df["sender"]
-      |> S.distinct()
-      |> S.to_list()
-      |> Enum.reject(&(&1 == "SYSTEM"))
-
-    message_counts =
-      Enum.map(senders, fn sender ->
-        count =
-          df
-          |> DF.filter_with(fn rows -> S.equal(rows["sender"], sender) end)
-          |> DF.n_rows()
-
-        {sender, count}
-      end)
-      |> Map.new()
-
-    avg_lengths =
-      Enum.map(senders, fn sender ->
-        avg =
-          df
-          |> DF.filter_with(fn rows -> S.equal(rows["sender"], sender) end)
-          |> DF.pull("message_length")
-          |> S.mean()
-
-        {sender, avg}
-      end)
-      |> Map.new()
+    senders = AnalysisHelpers.get_senders(df)
+    message_counts = AnalysisHelpers.aggregate_by_sender(df, "sender", :count)
+    avg_lengths = AnalysisHelpers.aggregate_by_sender(df, "message_length", :mean)
 
     romantic_count = AnalysisHelpers.count_indicators(df, Config.romantic_indicators())
 
@@ -124,12 +97,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
       |> DF.filter_with(fn rows -> S.is_not_nil(rows["response_time_minutes"]) end)
 
     avg_response_time = response_df["response_time_minutes"] |> S.mean()
-
-    senders =
-      df["sender"]
-      |> S.distinct()
-      |> S.to_list()
-      |> Enum.reject(&(&1 == "SYSTEM"))
+    senders = AnalysisHelpers.get_senders(df)
 
     response_by_sender =
       Enum.map(senders, fn sender ->
@@ -181,28 +149,8 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
     }
   end
 
-
   defp analyze_time_of_day(df) do
-    time_periods = [
-      {"morning", 5, 11},
-      {"afternoon", 12, 17},
-      {"evening", 18, 22},
-      {"night", 23, 4}
-    ]
-
-    time_period =
-      df["hour"]
-      |> S.transform(fn hour ->
-        Enum.find_value(time_periods, "other", fn {period, start, end_hour} ->
-          if start <= end_hour do
-            if hour >= start && hour <= end_hour, do: period
-          else
-            if hour >= start || hour <= end_hour, do: period
-          end
-        end)
-      end)
-
-    df_with_period = DF.put(df, "time_period", time_period)
+    df_with_period = AnalysisHelpers.add_time_period(df)
 
     time_distribution =
       df_with_period
@@ -213,13 +161,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
       |> Map.new()
 
     total = DF.n_rows(df)
-
-    percentage_distribution =
-      time_distribution
-      |> Enum.map(fn {period, count} ->
-        {period, round(count / total * 100)}
-      end)
-      |> Map.new()
+    percentage_distribution = AnalysisHelpers.percentage_distribution(time_distribution, total)
 
     %{
       count_by_period: time_distribution,
@@ -228,11 +170,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
   end
 
   defp analyze_day_of_week(df) do
-    day_name =
-      df["day_of_week"]
-      |> S.transform(fn day -> Config.day_name(day) end)
-
-    df_with_day_names = DF.put(df, "day_name", day_name)
+    df_with_day_names = AnalysisHelpers.add_day_names(df)
 
     day_distribution =
       df_with_day_names
@@ -243,13 +181,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
       |> Map.new()
 
     total = DF.n_rows(df)
-
-    percentage_distribution =
-      day_distribution
-      |> Enum.map(fn {day, count} ->
-        {day, round(count / total * 100)}
-      end)
-      |> Map.new()
+    percentage_distribution = AnalysisHelpers.percentage_distribution(day_distribution, total)
 
     weekday_count =
       Enum.sum(for day <- 1..5, do: Map.get(day_distribution, Config.day_name(day), 0))
@@ -295,17 +227,23 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
     %{messages_per_day: messages_per_day} = calculate_messaging_frequency(df)
     response_patterns = analyze_response_patterns(df)
 
-    romantic_normalized = min(romantic_score.percentage_of_messages * 5, 100)
-    intimacy_normalized = min(intimacy_score.percentage_of_messages * 5, 100)
-    future_normalized = min(future_planning_score.percentage_of_messages * 10, 100)
-    frequency_normalized = min(messages_per_day / 20 * 100, 100)
+    factors = Config.score_normalization()
 
-    response_normalized =
-      if is_nil(response_patterns.overall_avg_minutes) do
-        50
-      else
-        max(100 - response_patterns.overall_avg_minutes * 2, 0)
-      end
+    romantic_normalized =
+      min(romantic_score.percentage_of_messages * factors.romantic_multiplier, factors.max_score)
+
+    intimacy_normalized =
+      min(intimacy_score.percentage_of_messages * factors.intimacy_multiplier, factors.max_score)
+
+    future_normalized =
+      min(
+        future_planning_score.percentage_of_messages * factors.future_multiplier,
+        factors.max_score
+      )
+
+    frequency_normalized = min(messages_per_day / factors.frequency_base * 100, factors.max_score)
+
+    response_normalized = normalize_response_time(response_patterns.overall_avg_minutes, factors)
 
     %{
       romantic_normalized: romantic_normalized,
@@ -317,13 +255,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
   end
 
   defp calculate_weighted_score(components) do
-    weights = %{
-      romantic_indicators: 0.35,
-      intimacy: 0.25,
-      future_planning: 0.15,
-      messaging_frequency: 0.15,
-      response_time: 0.10
-    }
+    weights = Config.classification_weights()
 
     components.romantic_normalized * weights.romantic_indicators +
       components.intimacy_normalized * weights.intimacy +
@@ -332,12 +264,16 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
       components.response_normalized * weights.response_time
   end
 
-  defp classify_by_score(weighted_score) do
-    cond do
-      weighted_score >= 70 -> "Romantic"
-      weighted_score >= 40 -> "Close Friend"
-      weighted_score >= 20 -> "Friend"
-      true -> "Acquaintance"
-    end
+  @spec normalize_response_time(nil | number(), map()) :: number()
+  defp normalize_response_time(nil, _factors), do: 50
+
+  defp normalize_response_time(avg_minutes, factors) do
+    max(100 - avg_minutes * factors.response_sensitivity, 0)
   end
+
+  @spec classify_by_score(number()) :: String.t()
+  defp classify_by_score(score) when score >= 70, do: "Romantic"
+  defp classify_by_score(score) when score >= 40, do: "Close Friend"
+  defp classify_by_score(score) when score >= 20, do: "Friend"
+  defp classify_by_score(_score), do: "Acquaintance"
 end

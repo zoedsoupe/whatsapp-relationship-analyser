@@ -1,6 +1,9 @@
 defmodule WhatsAppAnalyzerWeb.AnalysisController do
   use WhatsAppAnalyzerWeb, :controller
 
+  @ets_table :analysis_results
+
+  @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def create(conn, %{"upload" => %Plug.Upload{path: path}}) do
     # Generate unique ID for this analysis
     analysis_id = :crypto.strong_rand_bytes(16) |> Base.url_encode64(padding: false)
@@ -25,8 +28,9 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
     |> redirect(to: Routes.page_path(conn, :index))
   end
 
+  @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def show(conn, %{"id" => id}) do
-    case :ets.lookup(:analysis_results, id) do
+    case :ets.lookup(@ets_table, id) do
       [{^id, results}] ->
         html(conn, render_results_page(conn, results, id))
 
@@ -37,6 +41,7 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
     end
   end
 
+  @spec render_results_page(Plug.Conn.t(), map(), String.t()) :: String.t()
   defp render_results_page(conn, results, _analysis_id) do
     alias WhatsAppAnalyzerWeb.VegaLiteHelper
 
@@ -126,10 +131,10 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
 
             <!-- Conversation Segments -->
             #{if length(results.conversation_segments) > 0 do
-              render_conversation_segments(results.conversation_segments)
-            else
-              ""
-            end}
+      render_conversation_segments(results.conversation_segments)
+    else
+      ""
+    end}
           </div>
         </main>
       </body>
@@ -137,6 +142,7 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
     """
   end
 
+  @spec render_conversation_segments([map()]) :: String.t()
   defp render_conversation_segments(segments) do
     """
     <div class="section">
@@ -144,20 +150,19 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
       <p>Total Conversations: #{length(segments)}</p>
 
       <div class="segments-list">
-        #{Enum.take(segments, 10)
-          |> Enum.map(&render_segment/1)
-          |> Enum.join("\n")}
+        #{Enum.take(segments, 10) |> Enum.map(&render_segment/1) |> Enum.join("\n")}
       </div>
 
       #{if length(segments) > 10 do
-        ~s(<p class="note">Showing first 10 of #{length(segments)} conversations</p>)
-      else
-        ""
-      end}
+      ~s(<p class="note">Showing first 10 of #{length(segments)} conversations</p>)
+    else
+      ""
+    end}
     </div>
     """
   end
 
+  @spec render_segment(map()) :: String.t()
   defp render_segment(segment) do
     """
     <div class="segment-card">
@@ -169,6 +174,7 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
     """
   end
 
+  @spec process_and_store(Path.t(), String.t()) :: :ok | {:error, String.t()}
   defp process_and_store(file_path, analysis_id) do
     try do
       # Use the unified API which handles both regular and streaming parsing
@@ -178,8 +184,7 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
       if Map.has_key?(analysis_results, :error) do
         {:error, analysis_results.error}
       else
-        # Store results in ETS (temporary storage)
-        :ets.insert(:analysis_results, {analysis_id, serialize_results(analysis_results)})
+        :ets.insert(@ets_table, {analysis_id, serialize_results(analysis_results)})
         :ok
       end
     rescue
@@ -188,6 +193,7 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
     end
   end
 
+  @spec serialize_results(map()) :: map()
   defp serialize_results(analysis_results) do
     # Convert analysis results to a serializable format for display
     %{
@@ -195,7 +201,10 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
       total_days: analysis_results.analysis.time_span.days,
       avg_messages_per_day: analysis_results.analysis.messaging_frequency.messages_per_day,
       avg_response_time: analysis_results.analysis.response_patterns.overall_avg_minutes || 0,
-      relationship_classification: analysis_results.analysis.relationship_classification.classification |> String.downcase() |> String.replace(" ", "_"),
+      relationship_classification:
+        analysis_results.analysis.relationship_classification.classification
+        |> String.downcase()
+        |> String.replace(" ", "_"),
       relationship_score: analysis_results.analysis.relationship_classification.score,
       sender_stats_chart: analysis_results.visualizations.sender_distribution,
       hourly_chart: analysis_results.visualizations.time_heatmap,

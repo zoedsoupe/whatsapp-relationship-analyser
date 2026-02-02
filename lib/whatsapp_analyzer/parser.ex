@@ -3,18 +3,23 @@ defmodule WhatsAppAnalyzer.Parser do
   Parses WhatsApp chat export files into structured data.
   """
 
+  alias WhatsAppAnalyzer.DateTimeParser
+
+  @type message :: DateTimeParser.message()
+
   @doc """
   Parses a WhatsApp chat export file into a list of message maps.
-  
+
   ## Parameters
     - file_path: Path to the WhatsApp chat export file
-    
+
   ## Returns
     - List of message maps with keys:
       - :datetime - NaiveDateTime
       - :sender - String
       - :message - String
   """
+  @spec parse_file(Path.t()) :: [message()]
   def parse_file(file_path) do
     File.read!(file_path)
     |> String.split("\n")
@@ -22,115 +27,24 @@ defmodule WhatsAppAnalyzer.Parser do
     |> parse_lines([])
   end
 
+  @spec parse_lines([String.t()], [message()]) :: [message()]
   defp parse_lines([], acc), do: Enum.reverse(acc)
+
   defp parse_lines([line | rest], acc) do
-    case parse_line(line) do
-      {:ok, message} -> parse_lines(rest, [message | acc])
+    case DateTimeParser.parse_line(line) do
+      {:ok, message} ->
+        parse_lines(rest, [message | acc])
+
       :error ->
-        # If line doesn't match pattern, try to append to previous message (multiline handling)
-        case acc do
-          [prev | tail] ->
-            updated = %{prev | message: prev.message <> "\n" <> line}
-            parse_lines(rest, [updated | tail])
-          [] -> parse_lines(rest, acc)
-        end
+        handle_continuation(line, rest, acc)
     end
   end
 
-  defp parse_line(line) do
-    # Normalize Unicode whitespace characters (WhatsApp exports sometimes contain U+202F)
-    # U+00A0 (non-breaking space), U+202F (narrow no-break space), U+2009 (thin space)
-    line = String.replace(line, <<0xC2, 0xA0>>, " ")  # U+00A0
-    line = String.replace(line, <<0xE2, 0x80, 0xAF>>, " ")  # U+202F
-    line = String.replace(line, <<0xE2, 0x80, 0x89>>, " ")  # U+2009
-
-    # Match formats with and without seconds, with or without AM/PM
-    # [DD/MM/YY, HH:MM:SS AM/PM] Sender: Message
-    # [DD/MM/YY, HH:MM AM/PM] Sender: Message
-    # [DD/MM/YY, HH:MM:SS] Sender: Message
-    # [DD/MM/YY, HH:MM] Sender: Message
-    date_time_pattern = ~r/\[(\d{2}\/\d{2}\/\d{2,4}), (\d{1,2}:\d{2}(?::\d{2})?(?: [AP]M)?)\] ([^:]+): (.+)/
-
-    case Regex.run(date_time_pattern, line) do
-      [_, date, time, sender, message] ->
-        {:ok, %{
-          datetime: parse_datetime(date, time),
-          sender: String.trim(sender),
-          message: String.trim(message)
-        }}
-      _ ->
-        # Try to handle system messages or other non-standard formats
-        if String.contains?(line, "[") && String.contains?(line, "]") do
-          # It's likely a system message
-          system_pattern = ~r/\[(\d{2}\/\d{2}\/\d{2,4}), (\d{1,2}:\d{2}(?::\d{2})?(?: [AP]M)?)\] (.+)/
-          case Regex.run(system_pattern, line) do
-            [_, date, time, system_message] ->
-              {:ok, %{
-                datetime: parse_datetime(date, time),
-                sender: "SYSTEM",
-                message: String.trim(system_message)
-              }}
-            _ -> :error
-          end
-        else
-          # It might be a continuation of a previous message
-          :error
-        end
-    end
+  @spec handle_continuation(String.t(), [String.t()], [message()]) :: [message()]
+  defp handle_continuation(line, rest, [prev | tail]) do
+    updated = %{prev | message: prev.message <> "\n" <> line}
+    parse_lines(rest, [updated | tail])
   end
 
-  defp parse_datetime(date, time) do
-    try do
-      # Handle both date formats: DD/MM/YY and DD/MM/YYYY
-      [day, month, year_str] = String.split(date, "/")
-
-      day = String.to_integer(day)
-      month = String.to_integer(month)
-
-      # Adjust year if needed (e.g., "22" -> 2022)
-      year = case String.length(year_str) do
-        2 -> 2000 + String.to_integer(year_str)
-        4 -> String.to_integer(year_str)
-        _ -> 2000 + String.to_integer(year_str)
-      end
-
-      # Check for AM/PM and extract it
-      {time_str, am_pm} =
-        if String.ends_with?(time, " AM") or String.ends_with?(time, " PM") do
-          [t, period] = String.split(time, " ")
-          {t, period}
-        else
-          {time, nil}
-        end
-
-      # Handle time both with and without seconds
-      time_parts = String.split(time_str, ":")
-      {hour, minute, second} = case length(time_parts) do
-        2 ->
-          [h, m] = Enum.map(time_parts, &String.to_integer/1)
-          {h, m, 0}
-        3 ->
-          [h, m, s] = Enum.map(time_parts, &String.to_integer/1)
-          {h, m, s}
-      end
-
-      # Convert 12-hour format to 24-hour format if AM/PM is present
-      hour = case am_pm do
-        "AM" ->
-          if hour == 12, do: 0, else: hour
-        "PM" ->
-          if hour == 12, do: 12, else: hour + 12
-        nil ->
-          hour
-      end
-
-      # Validate datetime with fallback
-      case NaiveDateTime.new(year, month, day, hour, minute, second) do
-        {:ok, datetime} -> datetime
-        {:error, _} -> ~N[1970-01-01 00:00:00]
-      end
-    rescue
-      _ -> ~N[1970-01-01 00:00:00]
-    end
-  end
+  defp handle_continuation(_line, rest, []), do: parse_lines(rest, [])
 end

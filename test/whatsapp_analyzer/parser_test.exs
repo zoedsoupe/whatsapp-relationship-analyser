@@ -26,7 +26,8 @@ defmodule WhatsAppAnalyzer.ParserTest do
       messages = Parser.parse_file(path)
 
       # Find Bob's first multiline message
-      bobs_first_msg = Enum.find(messages, &(&1.sender == "Bob" && String.contains?(&1.message, "big project")))
+      bobs_first_msg =
+        Enum.find(messages, &(&1.sender == "Bob" && String.contains?(&1.message, "big project")))
 
       assert bobs_first_msg != nil
       assert String.contains?(bobs_first_msg.message, "I'm doing great!")
@@ -74,8 +75,8 @@ defmodule WhatsAppAnalyzer.ParserTest do
 
       # All messages should have valid datetimes (or fallback datetime)
       assert Enum.all?(messages, fn msg ->
-        is_struct(msg.datetime, NaiveDateTime)
-      end)
+               is_struct(msg.datetime, NaiveDateTime)
+             end)
     end
   end
 end

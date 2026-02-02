@@ -17,6 +17,7 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
   - by_sender: Map of sender -> count
   - percentage_of_messages: Percentage of messages containing indicators
   """
+  @spec count_indicators(DF.t(), [String.t()]) :: map()
   def count_indicators(df, indicator_list) do
     indicators_regex =
       indicator_list
@@ -67,17 +68,19 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
   Takes a DataFrame, a column name, and an aggregation function (:sum, :mean, :count).
   Returns a map of sender -> aggregated_value.
   """
+  @spec aggregate_by_sender(DF.t(), String.t(), :count | :sum | :mean) :: map()
   def aggregate_by_sender(df, column, aggregation \\ :count) do
     senders = get_senders(df)
 
     Enum.map(senders, fn sender ->
       sender_df = DF.filter_with(df, fn rows -> S.equal(rows["sender"], sender) end)
 
-      value = case aggregation do
-        :count -> DF.n_rows(sender_df)
-        :sum -> if DF.n_rows(sender_df) > 0, do: S.sum(sender_df[column]), else: 0
-        :mean -> if DF.n_rows(sender_df) > 0, do: S.mean(sender_df[column]), else: nil
-      end
+      value =
+        case aggregation do
+          :count -> DF.n_rows(sender_df)
+          :sum -> if DF.n_rows(sender_df) > 0, do: S.sum(sender_df[column]), else: 0
+          :mean -> if DF.n_rows(sender_df) > 0, do: S.mean(sender_df[column]), else: nil
+        end
 
       {sender, value}
     end)
@@ -87,6 +90,7 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
   @doc """
   Gets distinct senders from a DataFrame, excluding SYSTEM.
   """
+  @spec get_senders(DF.t()) :: [String.t()]
   def get_senders(df) do
     df["sender"]
     |> S.distinct()
@@ -97,6 +101,7 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
   @doc """
   Adds day_name column to a DataFrame based on day_of_week.
   """
+  @spec add_day_names(DF.t()) :: DF.t()
   def add_day_names(df) do
     day_name =
       df["day_of_week"]
@@ -108,6 +113,7 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
   @doc """
   Adds time_period column to a DataFrame based on hour.
   """
+  @spec add_time_period(DF.t()) :: DF.t()
   def add_time_period(df) do
     time_period =
       df["hour"]
@@ -120,6 +126,7 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
   Calculates percentage distribution for a grouped DataFrame.
   Takes the result of a group_by + summarise operation.
   """
+  @spec percentage_distribution(map(), number()) :: map()
   def percentage_distribution(counts_map, total) do
     counts_map
     |> Enum.map(fn {key, count} ->

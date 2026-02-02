@@ -64,7 +64,8 @@ defmodule WhatsAppAnalyzer.MLSummarizer do
     all_text
     |> String.downcase()
     |> String.split(~r/\W+/, trim: true)
-    |> Enum.filter(&(String.length(&1) > 3))  # Only words longer than 3 chars
+    # Only words longer than 3 chars
+    |> Enum.filter(&(String.length(&1) > 3))
     |> Enum.frequencies()
     |> Enum.sort_by(fn {_word, count} -> -count end)
     |> Enum.take(top_n)
@@ -88,12 +89,13 @@ defmodule WhatsAppAnalyzer.MLSummarizer do
 
     total = positive_count + negative_count
 
-    sentiment = cond do
-      total == 0 -> :neutral
-      positive_count > negative_count -> :positive
-      negative_count > positive_count -> :negative
-      true -> :neutral
-    end
+    sentiment =
+      cond do
+        total == 0 -> :neutral
+        positive_count > negative_count -> :positive
+        negative_count > positive_count -> :negative
+        true -> :neutral
+      end
 
     %{
       sentiment: sentiment,

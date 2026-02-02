@@ -24,11 +24,13 @@ all wrapped up in pretty visualizations that make relationship anxiety look prof
 
 ## super simple setup
 
-### for the technically adventurous:
+### prerequisites
 
-1. **prerequisites**: elixir (version 1.18+) and erlang/otp (27+)
+- elixir (version 1.18+) and erlang/otp (28+)
 
-2. **clone & setup**:
+### installation
+
+1. **clone & setup**:
    ```bash
    git clone git@github.com:zoedsoupe/whatsapp-relationship-analyzer.git
    cd whatsapp-relationship-analyzer
@@ -36,34 +38,30 @@ all wrapped up in pretty visualizations that make relationship anxiety look prof
    mix compile
    ```
 
-3. **run livebook**:
+2. **run the phoenix server**:
    ```bash
-   mix livebook.server
+   mix phx.server
    ```
 
-4. **get your chat data**:
-   - open whatsapp
-   - go to a chat and tap the three dots → more → export chat
-   - choose "without media" (unless you want your computer to explode)
-   - send it to yourself
-   
-5. **configure the runtime (very important!):**
-   - open the "runtime settings" (sr keyboard shortcut)
-   - select "attached node" as the runtime
-   - you need to start the app with `iex --name <name>@<host> --cookie <secret> -S mix`
-      - example: `iex --name whatsapp@127.0.0.1 --cookie zoey -S mix`
-   - then fill the "name" and "cookie" fields and connect
-   - evaluate the Analysis Cell, upload your `_chat.txt` and waits...
+3. **open your browser**:
+   - navigate to http://localhost:4000
+   - upload your whatsapp chat export file
+   - wait for the magic to happen!
 
-### for the "just let me try it" crowd:
-i'm working on a phoenix web interface so you can just upload your chat online.
+### get your chat data
+
+- open whatsapp
+- go to a chat and tap the three dots → more → export chat
+- choose "without media" (unless you want your computer to explode)
+- save the .txt file
+- upload it to the analyzer
 
 ## how it works
 
 as someone who finds comfort in understanding systems, here's how this one functions:
 
 1. **chat parsing**: converts messy whatsapp exports into structured data (because timestamps are a nightmare)
-2. **feature extraction**: identifies patterns in your messaging behavior 
+2. **feature extraction**: identifies patterns in your messaging behavior
 3. **classification**: applies weighted scoring to determine relationship type
 4. **visualization**: generates charts that make your relationship look like a scientific study
 
@@ -80,7 +78,6 @@ it's like having a social decoder ring for all those subtle cues i might miss!
 
 here's what i might add:
 
-- **web interface**: for people who don't want to set up elixir
 - **more platforms**: because relationships happen in more places than just whatsapp
 - **sentiment analysis**: to figure out if "fine" means fine or *fine*
 - **time-series analysis**: to track how relationships change over time

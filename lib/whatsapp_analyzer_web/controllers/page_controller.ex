@@ -70,9 +70,14 @@ defmodule WhatsAppAnalyzerWeb.PageController do
     error = Phoenix.Flash.get(conn.assigns[:flash] || %{}, :error)
 
     cond do
-      info -> ~s(<div class="alert alert-info">#{Phoenix.HTML.html_escape(info) |> Phoenix.HTML.safe_to_string()}</div>)
-      error -> ~s(<div class="alert alert-error">#{Phoenix.HTML.html_escape(error) |> Phoenix.HTML.safe_to_string()}</div>)
-      true -> ""
+      info ->
+        ~s(<div class="alert alert-info">#{Phoenix.HTML.html_escape(info) |> Phoenix.HTML.safe_to_string()}</div>)
+
+      error ->
+        ~s(<div class="alert alert-error">#{Phoenix.HTML.html_escape(error) |> Phoenix.HTML.safe_to_string()}</div>)
+
+      true ->
+        ""
     end
   end
 end

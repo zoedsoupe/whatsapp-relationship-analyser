@@ -2,7 +2,6 @@ defmodule WhatsAppAnalyzer.DataProcessorTest do
   use ExUnit.Case, async: true
 
   alias WhatsAppAnalyzer.DataProcessor
-  alias WhatsAppAnalyzer.Parser
 
   require Explorer.DataFrame, as: DF
 

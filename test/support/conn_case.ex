@@ -22,7 +22,13 @@ defmodule WhatsAppAnalyzerWeb.ConnCase do
 
   setup _tags do
     conn = Phoenix.ConnTest.build_conn()
-    conn = %{conn | secret_key_base: Application.get_env(:whatsapp_analyser, WhatsAppAnalyzerWeb.Endpoint)[:secret_key_base]}
+
+    conn = %{
+      conn
+      | secret_key_base:
+          Application.get_env(:whatsapp_analyser, WhatsAppAnalyzerWeb.Endpoint)[:secret_key_base]
+    }
+
     {:ok, conn: conn}
   end
 end

@@ -40,7 +40,9 @@ defmodule WhatsAppAnalyzer.MixProject do
       {:bumblebee, "~> 0.6"},
       {:exla, "~> 0.9"},
       {:tokenizers, "~> 0.5"},
-      {:stemmer, "~> 1.2"}
+      {:stemmer, "~> 1.2"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false}
     ]
   end
 end

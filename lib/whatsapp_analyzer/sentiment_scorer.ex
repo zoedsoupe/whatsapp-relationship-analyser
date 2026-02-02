@@ -55,7 +55,13 @@ defmodule WhatsAppAnalyzer.SentimentScorer do
   """
   def add_sentiment_columns(%DataFrame{} = df) do
     messages = df |> DataFrame.pull("message") |> Series.to_list()
-    scores = Enum.map(messages, &score_message/1)
+    message_types = df |> DataFrame.pull("message_type") |> Series.to_list()
+
+    scores =
+      Enum.zip(messages, message_types)
+      |> Enum.map(fn {message, type} ->
+        if type == "text", do: score_message(message), else: zero_scores()
+      end)
 
     df
     |> DataFrame.put("romantic_score", Enum.map(scores, & &1.romantic))
@@ -70,13 +76,17 @@ defmodule WhatsAppAnalyzer.SentimentScorer do
       when category in [:romantic, :intimacy, :future_planning] do
     score_column = "#{category}_score"
 
-    df
-    |> DataFrame.filter_with(&Series.greater(&1[score_column], 0))
-    |> DataFrame.sort_by([{score_column, :desc}])
-    |> DataFrame.slice(0, limit)
-    |> DataFrame.select(["datetime", "sender", "message", score_column])
-    |> DataFrame.to_rows()
-    |> Enum.map(&format_excerpt(&1, score_column))
+    excerpts =
+      df
+      |> DataFrame.filter_with(&Series.equal(&1["message_type"], "text"))
+      |> DataFrame.sort_by(desc: ^score_column)
+      |> DataFrame.slice(0, limit)
+      |> DataFrame.select(["datetime", "sender", "message", score_column])
+      |> DataFrame.to_rows()
+      |> Enum.map(&format_excerpt(&1, score_column))
+
+    Logger.debug("Extracted #{length(excerpts)} excerpts for #{category}")
+    excerpts
   rescue
     e in [ArithmeticError, KeyError, ArgumentError] ->
       Logger.debug("Extract excerpts failed: #{Exception.message(e)}")
@@ -134,7 +144,7 @@ defmodule WhatsAppAnalyzer.SentimentScorer do
       datetime: row["datetime"],
       sender: row["sender"],
       message: row["message"],
-      score: row[score_column]
+      score: row[score_column] || 0
     }
   end
 end

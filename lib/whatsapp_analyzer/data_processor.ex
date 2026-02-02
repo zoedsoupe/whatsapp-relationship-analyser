@@ -16,7 +16,8 @@ defmodule WhatsAppAnalyzer.DataProcessor do
     DF.new(
       datetime: Enum.map(messages, & &1.datetime),
       sender: Enum.map(messages, & &1.sender),
-      message: Enum.map(messages, & &1.message)
+      message: Enum.map(messages, & &1.message),
+      message_type: Enum.map(messages, &Atom.to_string(&1.message_type))
     )
   end
 

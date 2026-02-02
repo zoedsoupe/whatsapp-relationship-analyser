@@ -15,6 +15,49 @@ defmodule WhatsAppAnalyzer.DateTimeParser do
   @message_pattern ~r/\[(\d{2}\/\d{2}\/\d{2,4}), (\d{1,2}:\d{2}(?::\d{2})?(?: [AP]M)?)\] ([^:]+): (.+)/
   @system_pattern ~r/\[(\d{2}\/\d{2}\/\d{2,4}), (\d{1,2}:\d{2}(?::\d{2})?(?: [AP]M)?)\] (.+)/
 
+  @media_patterns %{
+    audio: [
+      "<áudio oculto>",
+      "<audio omitted>",
+      "<Audio omitted>",
+      "<AUDIO OMITTED>",
+      "audio omitted",
+      "áudio oculto"
+    ],
+    image: [
+      "<imagem oculta>",
+      "<image omitted>",
+      "<Image omitted>",
+      "<IMAGE OMITTED>",
+      "image omitted",
+      "imagem oculta"
+    ],
+    sticker: [
+      "<figurinha oculta>",
+      "<sticker omitted>",
+      "<Sticker omitted>",
+      "<STICKER OMITTED>",
+      "sticker omitted",
+      "figurinha oculta"
+    ],
+    video: [
+      "<vídeo oculto>",
+      "<video omitted>",
+      "<Video omitted>",
+      "<VIDEO OMITTED>",
+      "video omitted",
+      "vídeo oculto"
+    ],
+    document: [
+      "<documento oculto>",
+      "<document omitted>",
+      "<Document omitted>",
+      "<DOCUMENT OMITTED>",
+      "document omitted",
+      "documento oculto"
+    ]
+  }
+
   @unicode_spaces [
     # U+00A0 non-breaking space
     <<0xC2, 0xA0>>,
@@ -27,7 +70,8 @@ defmodule WhatsAppAnalyzer.DateTimeParser do
   @type message :: %{
           datetime: NaiveDateTime.t(),
           sender: String.t(),
-          message: String.t()
+          message: String.t(),
+          message_type: atom()
         }
 
   @doc """
@@ -86,6 +130,24 @@ defmodule WhatsAppAnalyzer.DateTimeParser do
     end
   end
 
+  @doc """
+  Classifies a message into its type based on content.
+
+  Returns one of: :text, :audio, :image, :sticker, :video, :document, :media
+  """
+  @spec classify_message_type(String.t()) :: atom()
+  def classify_message_type(message) when is_binary(message) do
+    message_lower = String.downcase(message)
+
+    Enum.find_value(@media_patterns, :text, fn {type, patterns} ->
+      if Enum.any?(patterns, &String.contains?(message_lower, String.downcase(&1))) do
+        type
+      end
+    end)
+  end
+
+  def classify_message_type(_), do: :text
+
   # Private Functions
 
   @spec parse_system_message(String.t()) :: {:ok, message()} | :error
@@ -93,11 +155,14 @@ defmodule WhatsAppAnalyzer.DateTimeParser do
     if String.contains?(line, "[") && String.contains?(line, "]") do
       case Regex.run(@system_pattern, line) do
         [_, date, time, system_message] ->
+          trimmed_message = String.trim(system_message)
+
           {:ok,
            %{
              datetime: parse_datetime(date, time),
              sender: "SYSTEM",
-             message: String.trim(system_message)
+             message: trimmed_message,
+             message_type: classify_message_type(trimmed_message)
            }}
 
         _ ->
@@ -110,10 +175,13 @@ defmodule WhatsAppAnalyzer.DateTimeParser do
 
   @spec build_message(String.t(), String.t(), String.t(), String.t()) :: message()
   defp build_message(date, time, sender, message) do
+    trimmed_message = String.trim(message)
+
     %{
       datetime: parse_datetime(date, time),
       sender: String.trim(sender),
-      message: String.trim(message)
+      message: trimmed_message,
+      message_type: classify_message_type(trimmed_message)
     }
   end
 

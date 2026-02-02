@@ -38,6 +38,7 @@ defmodule WhatsAppAnalyzer.MixProject do
       {:phoenix_live_view, "~> 1.0"},
       {:plug_cowboy, "~> 2.7"},
       {:jason, "~> 1.4"},
+      {:bandit, "~> 1.0"},
 
       # Data analysis stack
       {:explorer, "~> 0.10"},
@@ -46,6 +47,7 @@ defmodule WhatsAppAnalyzer.MixProject do
       {:axon, "~> 0.7"},
       {:bumblebee, "~> 0.6"},
       {:exla, "~> 0.9"},
+      {:kino, "~> 0.14"},
       {:tokenizers, "~> 0.5"},
       {:stemmer, "~> 1.2"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

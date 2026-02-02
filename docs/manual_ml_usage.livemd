@@ -1,0 +1,492 @@
+# Manual ML Usage - WhatsApp Analyzer
+
+## Overview
+
+This Livebook provides a comprehensive guide to using the ML models in WhatsApp Analyzer manually. You can use this for custom analysis, batch processing, or experimenting with the models.
+
+## Introduction
+
+WhatsApp Analyzer includes two main ML capabilities:
+
+1. **Sentiment Analysis** - Analyzes emotional content of messages
+2. **Text Summarization** - Generates summaries of conversation segments
+
+This guide shows how to use both features programmatically.
+
+## Part 1: Sentiment Analysis
+
+### 1.1 Basic Sentiment Scoring (Keyword-based)
+
+The simplest approach uses keyword matching and doesn't require ML models:
+
+```elixir
+alias WhatsAppAnalyzer.SentimentScorer
+
+# Analyze a single message
+message = "Eu te amo muito, você é incrível!"
+scores = SentimentScorer.score_message(message)
+
+IO.inspect(scores, label: "Sentiment Scores")
+# Output: %{romantic: 2, intimacy: 1, future_planning: 0}
+```
+
+### 1.2 Understanding the Score Categories
+
+```elixir
+# Romantic indicators: love words, affection, compliments
+romantic_message = "Você é maravilhosa, te amo tanto!"
+romantic_scores = SentimentScorer.score_message(romantic_message)
+
+# Intimacy indicators: personal sharing, deep emotions
+intimacy_message = "Você me entende como ninguém, confio em você"
+intimacy_scores = SentimentScorer.score_message(intimacy_message)
+
+# Future planning: plans, commitments, future-oriented language
+future_message = "Vamos viajar juntos ano que vem, vai ser incrível!"
+future_scores = SentimentScorer.score_message(future_message)
+
+Kino.DataTable.new([
+  %{type: "Romantic", message: romantic_message, score: romantic_scores.romantic},
+  %{type: "Intimacy", message: intimacy_message, score: intimacy_scores.intimacy},
+  %{type: "Future Planning", message: future_message, score: future_scores.future_planning}
+])
+```
+
+### 1.3 Batch Analysis of Messages
+
+```elixir
+# Analyze multiple messages
+messages = [
+  "Bom dia amor!",
+  "Oi, tudo bem?",
+  "Saudades de você",
+  "Vamos jantar hoje?",
+  "Te amo muito ❤️"
+]
+
+results =
+  messages
+  |> Enum.map(fn msg ->
+    scores = SentimentScorer.score_message(msg)
+
+    %{
+      message: msg,
+      romantic: scores.romantic,
+      intimacy: scores.intimacy,
+      future_planning: scores.future_planning,
+      total: scores.romantic + scores.intimacy + scores.future_planning
+    }
+  end)
+
+Kino.DataTable.new(results)
+```
+
+### 1.4 Working with DataFrames
+
+```elixir
+alias Explorer.DataFrame
+alias Explorer.Series
+
+# Create a sample DataFrame
+data = %{
+  "datetime" => [
+    ~N[2024-01-01 10:00:00],
+    ~N[2024-01-01 10:05:00],
+    ~N[2024-01-01 10:10:00]
+  ],
+  "sender" => ["Alice", "Bob", "Alice"],
+  "message" => [
+    "Te amo muito!",
+    "Também te amo ❤️",
+    "Vamos viajar nas férias?"
+  ],
+  "message_type" => ["text", "text", "text"]
+}
+
+df = DataFrame.new(data)
+
+# Add sentiment columns
+df_with_sentiment = SentimentScorer.add_sentiment_columns(df)
+
+# Display the result
+df_with_sentiment
+|> DataFrame.select([
+  "sender",
+  "message",
+  "romantic_score",
+  "intimacy_score",
+  "future_planning_score"
+])
+```
+
+### 1.5 Extract Top Excerpts by Category
+
+```elixir
+# Extract top romantic messages from a DataFrame
+top_romantic = SentimentScorer.extract_top_excerpts(df_with_sentiment, :romantic, 5)
+
+Kino.DataTable.new(top_romantic)
+```
+
+### 1.6 ML-Based Sentiment Analysis (Optional)
+
+If you have ML models loaded, you can use more sophisticated sentiment analysis:
+
+```elixir
+# Note: This requires the sentiment model to be loaded via Nx.Serving
+# See the main application for model loading setup
+
+message = "Você é a pessoa mais especial da minha vida"
+
+# Use ML-based scoring with fallback to keywords
+ml_scores = SentimentScorer.score_message_ml(message, use_ml: true)
+
+IO.inspect(ml_scores, label: "ML Sentiment Scores")
+```
+
+## Part 2: Text Summarization
+
+### 2.1 Summarize a Conversation
+
+```elixir
+alias WhatsAppAnalyzer.MLSummarizer
+
+# Sample conversation messages
+conversation = [
+  "Oi, tudo bem?",
+  "Tudo ótimo! E você?",
+  "Também! Estava pensando em fazer aquela viagem que comentamos",
+  "Que legal! Para onde você estava pensando?",
+  "Pensei na praia, o que acha?",
+  "Adorei a ideia! Vamos planejar melhor no fim de semana?",
+  "Combinado!"
+]
+
+# Generate summary (fallback mode - doesn't require ML)
+summary = MLSummarizer.summarize_conversation_text(conversation, enable_ml: true)
+
+IO.puts("Summary: #{summary}")
+```
+
+### 2.2 Extract Key Topics
+
+```elixir
+# Extract main topics from a conversation
+topics = MLSummarizer.extract_key_topics(conversation, 5)
+
+Kino.Tree.new(topics)
+```
+
+### 2.3 Analyze Conversation Sentiment
+
+```elixir
+# Get sentiment analysis of a conversation
+sentiment_analysis = MLSummarizer.analyze_sentiment(conversation)
+
+IO.inspect(sentiment_analysis, label: "Conversation Sentiment")
+
+# Visualize sentiment
+Kino.DataTable.new([sentiment_analysis])
+```
+
+### 2.4 ML-Based Summarization (Optional)
+
+```elixir
+# Note: This requires the summarization model to be loaded
+# The model uses facebook/bart-large-cnn via Bumblebee
+
+long_conversation = [
+  "Oi amor, estava pensando em nossos planos para o futuro",
+  "Me conta mais sobre isso!",
+  "Bem, acho que deveríamos começar a economizar para comprar um apartamento",
+  "Concordo! Mas onde você pensa em morar?",
+  "Gostaria de algo perto do trabalho, mas também perto de parques",
+  "Faz sentido. E sobre o financiamento?",
+  "Podemos conversar com o banco semana que vem",
+  "Ótima ideia! Vou já pesquisar as opções"
+]
+
+# Enable ML summarization
+ml_summary = MLSummarizer.summarize_conversation_text(long_conversation, enable_ml: true)
+
+IO.puts("ML Summary: #{ml_summary}")
+```
+
+## Part 3: Complete Analysis Pipeline
+
+### 3.1 Parse a Chat File
+
+```elixir
+# Parse a WhatsApp chat export file
+file_path = "/path/to/your/_chat.txt"
+
+# Option 1: Parse and process in one go
+df = WhatsAppAnalyzer.parse_file(file_path)
+
+# Display basic stats
+IO.puts("Total messages: #{Explorer.DataFrame.n_rows(df)}")
+IO.puts("Date range: #{df["date"] |> Explorer.Series.min()} to #{df["date"] |> Explorer.Series.max()}")
+
+# Display first few rows
+df |> DataFrame.slice(0, 5)
+```
+
+### 3.2 Run Complete Analysis
+
+```elixir
+# Run full analysis on a chat file
+analysis_results = WhatsAppAnalyzer.analyze_chat(file_path)
+
+# Access different parts of the analysis
+IO.puts("Relationship Classification: #{analysis_results.analysis.relationship_classification.classification}")
+IO.puts("Confidence Score: #{analysis_results.analysis.relationship_classification.score}")
+IO.puts("Total Messages: #{analysis_results.analysis.total_messages}")
+IO.puts("Time Span: #{analysis_results.analysis.time_span.days} days")
+```
+
+### 3.3 Work with Conversation Segments
+
+```elixir
+# Get conversation segments
+segments = analysis_results.conversation_segments
+
+# Display segment information
+segment_info =
+  segments
+  |> Enum.take(10)
+  |> Enum.map(fn seg ->
+    %{
+      id: seg.conversation_id,
+      start: seg.start_time,
+      duration_min: Float.round(seg.duration_minutes, 1),
+      messages: seg.message_count,
+      participants: Enum.join(seg.participants, ", "),
+      summary: seg.text_summary || "N/A"
+    }
+  end)
+
+Kino.DataTable.new(segment_info)
+```
+
+### 3.4 Temporal Analysis
+
+```elixir
+# Get temporal summary
+temporal = analysis_results.temporal_summary
+
+IO.puts("Total Days: #{temporal.total_days}")
+IO.puts("Segmentation Type: #{temporal.segmentation_type}")
+IO.puts("Number of Periods: #{length(temporal.periods)}")
+
+# Display period summaries
+period_summaries =
+  temporal.periods
+  |> Enum.map(fn period ->
+    %{
+      period: period.period_key,
+      messages: period.message_count,
+      avg_per_day: period.messages_per_day,
+      romantic: period.sentiment_distribution.romantic,
+      intimacy: period.sentiment_distribution.intimacy,
+      future_planning: period.sentiment_distribution.future_planning,
+      themes: Enum.join(period.dominant_themes, ", ")
+    }
+  end)
+
+Kino.DataTable.new(period_summaries)
+```
+
+## Part 4: Custom ML Model Integration
+
+### 4.1 Load Custom Sentiment Model
+
+```elixir
+# Example of loading a custom sentiment model with Bumblebee
+{:ok, model_info} = Bumblebee.load_model({:hf, "cardiffnlp/twitter-xlm-roberta-base-sentiment"})
+{:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, "cardiffnlp/twitter-xlm-roberta-base-sentiment"})
+
+# Create a serving
+serving = Bumblebee.Text.text_classification(model_info, tokenizer)
+
+# Analyze a message
+result = Nx.Serving.run(serving, "Você é incrível!")
+IO.inspect(result, label: "Custom Model Result")
+```
+
+### 4.2 Batch Processing with Custom Models
+
+```elixir
+# Process multiple messages in batch
+batch_messages = [
+  "Te amo muito!",
+  "Estou com saudades",
+  "Vamos jantar hoje?",
+  "Boa noite!"
+]
+
+# Note: For actual batch processing, you'd need to configure the serving appropriately
+results =
+  batch_messages
+  |> Enum.map(fn msg ->
+    result = Nx.Serving.run(serving, msg)
+
+    %{
+      message: msg,
+      label: result.predictions |> List.first() |> Map.get(:label),
+      score: result.predictions |> List.first() |> Map.get(:score)
+    }
+  end)
+
+Kino.DataTable.new(results)
+```
+
+## Part 5: Advanced Techniques
+
+### 5.1 Custom Keyword Lists
+
+```elixir
+# You can extend the keyword lists for better sentiment detection
+alias WhatsAppAnalyzer.Keywords
+
+# View current keywords
+romantic_keywords = Keywords.romantic()
+IO.puts("Romantic keywords: #{Enum.join(romantic_keywords, ", ")}")
+
+# For custom analysis, you can create your own scoring function
+defmodule CustomScorer do
+  def count_custom_keywords(message, keywords) do
+    message_lower = String.downcase(message)
+    Enum.count(keywords, &String.contains?(message_lower, String.downcase(&1)))
+  end
+
+  def custom_score(message) do
+    custom_romantic = ["meu amor", "mozão", "vida", "coração"]
+    custom_intimacy = ["confiança", "apoio", "compreensão", "parceria"]
+
+    %{
+      romantic: count_custom_keywords(message, custom_romantic),
+      intimacy: count_custom_keywords(message, custom_intimacy)
+    }
+  end
+end
+
+# Test custom scoring
+test_message = "Meu amor, você é minha vida!"
+CustomScorer.custom_score(test_message)
+```
+
+### 5.2 Visualizing Results
+
+```elixir
+# Create custom visualizations using VegaLite
+alias VegaLite, as: Vl
+
+# Prepare sentiment data
+sentiment_data =
+  df_with_sentiment
+  |> DataFrame.select(["datetime", "romantic_score", "intimacy_score", "future_planning_score"])
+  |> DataFrame.to_rows()
+  |> Enum.flat_map(fn row ->
+    [
+      %{date: row["datetime"], category: "Romantic", score: row["romantic_score"]},
+      %{date: row["datetime"], category: "Intimacy", score: row["intimacy_score"]},
+      %{date: row["datetime"], category: "Future Planning", score: row["future_planning_score"]}
+    ]
+  end)
+
+# Create chart
+Vl.new(width: 600, height: 300)
+|> Vl.data_from_values(sentiment_data)
+|> Vl.mark(:line, point: true)
+|> Vl.encode_field(:x, "date", type: :temporal)
+|> Vl.encode_field(:y, "score", type: :quantitative)
+|> Vl.encode_field(:color, "category", type: :nominal)
+```
+
+### 5.3 Export Results
+
+```elixir
+# Export analysis results to CSV
+alias Explorer.DataFrame
+
+# Create a summary DataFrame
+summary_df =
+  df_with_sentiment
+  |> DataFrame.select([
+    "datetime",
+    "sender",
+    "message",
+    "romantic_score",
+    "intimacy_score",
+    "future_planning_score"
+  ])
+
+# Save to CSV
+output_path = "/tmp/whatsapp_sentiment_analysis.csv"
+DataFrame.to_csv(summary_df, output_path)
+
+IO.puts("Results saved to: #{output_path}")
+```
+
+## Best Practices
+
+1. **Start with keyword-based analysis** - It's fast and doesn't require model loading
+2. **Use ML models for complex cases** - When keyword matching isn't sufficient
+3. **Batch processing** - Process multiple messages at once for better performance
+4. **Cache results** - Store analyzed data to avoid re-processing
+5. **Experiment with thresholds** - Adjust scoring thresholds based on your use case
+6. **Combine approaches** - Use both keyword and ML methods for best results
+
+## Troubleshooting
+
+### Model Loading Issues
+
+If ML models fail to load:
+
+* Check that Bumblebee and Nx are properly installed
+* Ensure you have enough memory for the models
+* Use fallback (keyword-based) methods as an alternative
+
+### Performance Optimization
+
+For large chat files:
+
+* Use streaming parsing: `WhatsAppAnalyzer.parse_file(path, streaming: true)`
+* Process in batches rather than all at once
+* Disable ML if not needed: `enable_ml: false`
+
+### Memory Management
+
+```elixir
+# For very large datasets, process in chunks
+defmodule ChunkProcessor do
+  def process_in_chunks(df, chunk_size \\ 1000) do
+    total_rows = DataFrame.n_rows(df)
+    num_chunks = div(total_rows, chunk_size) + 1
+
+    Enum.map(0..(num_chunks - 1), fn i ->
+      start_idx = i * chunk_size
+      df |> DataFrame.slice(start_idx, chunk_size) |> SentimentScorer.add_sentiment_columns()
+    end)
+    |> Enum.reduce(fn chunk, acc -> DataFrame.concat_rows([acc, chunk]) end)
+  end
+end
+```
+
+## Resources
+
+* [WhatsApp Analyzer GitHub](https://github.com/yourusername/whatsapp-analyzer)
+* [Explorer Documentation](https://hexdocs.pm/explorer)
+* [Bumblebee Documentation](https://hexdocs.pm/bumblebee)
+* [Nx Documentation](https://hexdocs.pm/nx)
+
+## Conclusion
+
+This Livebook provides a foundation for working with WhatsApp Analyzer's ML capabilities. Experiment with different approaches, combine techniques, and customize the analysis for your specific needs.
+
+For production use, consider:
+
+* Setting up proper model caching
+* Implementing error handling
+* Monitoring performance
+* Validating results

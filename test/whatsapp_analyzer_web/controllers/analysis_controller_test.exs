@@ -72,15 +72,29 @@ defmodule WhatsAppAnalyzerWeb.AnalysisControllerTest do
         sender_stats_chart: test_chart,
         hourly_chart: test_chart,
         daily_chart: test_chart,
+        sentiment_timeline_chart: test_chart,
+        word_frequency_chart: test_chart,
+        conversation_flow_chart: test_chart,
         sentiment: %{
           romantic_count: 0,
           future_planning_count: 0,
           intimacy_count: 0
         },
+        sentiment_excerpts: %{
+          romantic: [],
+          intimacy: [],
+          future_planning: []
+        },
+        temporal_summary: %{
+          periods: [],
+          total_days: 0,
+          segmentation_type: :weekly
+        },
         conversation_segments: []
       }
 
-      :ets.insert(:analysis_results, {analysis_id, test_results})
+      timestamp = System.monotonic_time(:second)
+      :ets.insert(:analysis_results, {analysis_id, test_results, timestamp})
 
       conn = get(conn, Routes.analysis_path(conn, :show, analysis_id))
 

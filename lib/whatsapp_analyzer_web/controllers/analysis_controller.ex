@@ -82,27 +82,6 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
     end
   end
 
-  @spec generate_summaries(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def generate_summaries(conn, %{"id" => id}) do
-    case WhatsAppAnalyzer.SummaryGenerator.generate_summaries_async(id) do
-      {:ok, :started} ->
-        conn
-        |> put_flash(:info, "Generating ML summaries... This may take a few moments.")
-        |> redirect(to: Routes.analysis_path(conn, :show, id))
-
-      {:error, :not_found} ->
-        conn
-        |> put_flash(:error, "Analysis not found")
-        |> redirect(to: Routes.page_path(conn, :index))
-    end
-  end
-
-  @spec summary_status(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def summary_status(conn, %{"id" => id}) do
-    {:ok, status} = WhatsAppAnalyzer.SummaryGenerator.get_status(id)
-    json(conn, status)
-  end
-
   @spec process_and_store(Path.t(), String.t()) :: :ok | {:error, String.t()}
   defp process_and_store(file_path, analysis_id) do
     with {:ok, results} <- analyze_file(file_path),

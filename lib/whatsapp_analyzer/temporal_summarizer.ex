@@ -77,23 +77,34 @@ defmodule WhatsAppAnalyzer.TemporalSummarizer do
 
   @doc """
   Segments the DataFrame by adaptive time periods.
-  Returns a list of {period_key, period_df} tuples.
+  Returns a list of {period_key, period_df} tuples sorted by period index.
   """
   @spec segment_by_time_period(DataFrame.t(), atom()) :: [{String.t(), DataFrame.t()}]
   def segment_by_time_period(df, segmentation_type) do
     dates = df["datetime"] |> Series.to_list()
     start_date = Enum.min(dates) |> NaiveDateTime.to_date()
 
-    # Add period column to DataFrame
-    period_keys =
+    # Add period columns to DataFrame
+    period_data =
       dates
       |> Enum.map(fn datetime ->
-        calculate_period_key(NaiveDateTime.to_date(datetime), start_date, segmentation_type)
+        date = NaiveDateTime.to_date(datetime)
+
+        {
+          calculate_period_key(date, start_date, segmentation_type),
+          calculate_period_index(date, start_date, segmentation_type)
+        }
       end)
 
-    df_with_periods = DataFrame.put(df, "temporal_period", period_keys)
+    period_keys = Enum.map(period_data, &elem(&1, 0))
+    period_indices = Enum.map(period_data, &elem(&1, 1))
 
-    # Group by period
+    df_with_periods =
+      df
+      |> DataFrame.put("temporal_period", period_keys)
+      |> DataFrame.put("period_index", period_indices)
+
+    # Group by period and sort by period index
     period_keys
     |> Enum.uniq()
     |> Enum.map(fn period_key ->
@@ -102,8 +113,16 @@ defmodule WhatsAppAnalyzer.TemporalSummarizer do
           Series.equal(rows["temporal_period"], period_key)
         end)
 
-      {period_key, period_df}
+      # Get the period index from the first row
+      period_index =
+        period_df["period_index"]
+        |> Series.to_list()
+        |> List.first()
+
+      {period_key, period_df, period_index}
     end)
+    |> Enum.sort_by(&elem(&1, 2))
+    |> Enum.map(fn {period_key, period_df, _index} -> {period_key, period_df} end)
   end
 
   @doc """
@@ -195,17 +214,29 @@ defmodule WhatsAppAnalyzer.TemporalSummarizer do
   # Private helper functions
 
   defp calculate_period_key(date, start_date, :weekly) do
-    week_number = div(Date.diff(date, start_date), 7) + 1
+    week_number = max(1, div(Date.diff(date, start_date), 7) + 1)
     "Semana #{week_number}"
   end
 
   defp calculate_period_key(date, start_date, :biweekly) do
-    biweek_number = div(Date.diff(date, start_date), 14) + 1
+    biweek_number = max(1, div(Date.diff(date, start_date), 14) + 1)
     "Período #{biweek_number}"
   end
 
   defp calculate_period_key(date, _start_date, :monthly) do
     Calendar.strftime(date, "%Y-%m")
+  end
+
+  defp calculate_period_index(date, start_date, :weekly) do
+    max(0, div(Date.diff(date, start_date), 7))
+  end
+
+  defp calculate_period_index(date, start_date, :biweekly) do
+    max(0, div(Date.diff(date, start_date), 14))
+  end
+
+  defp calculate_period_index(date, _start_date, :monthly) do
+    date.year * 12 + date.month
   end
 
   # Stopwords em português

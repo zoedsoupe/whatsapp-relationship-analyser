@@ -273,37 +273,29 @@
             <h3>Conversation Segments</h3>
             <p>Total Conversations: <%= length(@results.conversation_segments) %></p>
 
-            <!-- Button to generate ML summaries -->
-            <form action={"/results/#{@analysis_id}/generate_summaries"} method="post" style="margin: 1rem 0;">
-              <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()}>
-              <button type="submit" class="btn-primary" id="generate-summaries-btn">
-                Generate ML Summaries
-              </button>
-            </form>
-
             <div class="segments-list">
-              <%= for segment <- Enum.take(@results.conversation_segments, 10) do %>
+              <%= for segment <- Enum.take(@results.conversation_segments, 20) do %>
                 <div class="segment-card">
-                  <h4>Conversation #<%= segment.conversation_id %></h4>
+                  <h4>Segment #<%= segment.conversation_id %></h4>
                   <p>
-                    <strong>Time:</strong>
-                    <%= Calendar.strftime(segment.start_time, "%Y-%m-%d %H:%M") %> -
-                    <%= Calendar.strftime(segment.end_time, "%Y-%m-%d %H:%M") %>
+                    <strong>Started:</strong>
+                    <%= Calendar.strftime(segment.start_time, "%Y-%m-%d %H:%M") %>
                   </p>
+                  <p><strong>Duration:</strong> <%= Float.round(segment.duration_minutes, 1) %> minutes</p>
                   <p><strong>Messages:</strong> <%= segment.message_count %></p>
                   <p><strong>Participants:</strong> <%= Enum.join(segment.participants, ", ") %></p>
                   <%= if segment.text_summary do %>
                     <div class="segment-summary">
-                      <%= segment.text_summary %>
+                      <strong>Summary:</strong> <%= segment.text_summary %>
                     </div>
                   <% end %>
                 </div>
               <% end %>
             </div>
 
-            <%= if length(@results.conversation_segments) > 10 do %>
+            <%= if length(@results.conversation_segments) > 20 do %>
               <p class="note">
-                Showing first 10 of <%= length(@results.conversation_segments) %> conversations
+                Showing first 20 of <%= length(@results.conversation_segments) %> conversations
               </p>
             <% end %>
           </div>
@@ -312,30 +304,5 @@
     </main>
 
     <script src="/js/app.js"></script>
-    <script>
-      // Poll for summary status if button was clicked
-      function pollSummaryStatus(analysisId) {
-        const interval = setInterval(() => {
-          fetch(`/results/${analysisId}/summary_status`)
-            .then(r => r.json())
-            .then(data => {
-              if (data.status === 'completed') {
-                clearInterval(interval);
-                location.reload();
-              }
-            });
-        }, 2000);
-      }
-
-      // Attach to button if needed
-      const generateBtn = document.getElementById('generate-summaries-btn');
-      if (generateBtn) {
-        generateBtn.addEventListener('click', function() {
-          setTimeout(() => {
-            pollSummaryStatus('<%= @analysis_id %>');
-          }, 500);
-        });
-      }
-    </script>
   </body>
 </html>

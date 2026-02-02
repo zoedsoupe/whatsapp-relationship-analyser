@@ -51,14 +51,14 @@ defmodule WhatsAppAnalyzer.Servings do
 
   @spec build_generation_serving(String.t(), :summarization) :: Nx.Serving.t()
   defp build_generation_serving(model_id, :summarization) do
-    {:ok, model} = Bumblebee.load_model({:hf, model_id})
-    {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, model_id})
-    {:ok, gen_config} = Bumblebee.load_generation_config({:hf, model_id})
+    rev = "e78923f1"
+    {:ok, model} = Bumblebee.load_model({:hf, model_id, revision: rev})
+    {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, model_id, revision: rev})
+    {:ok, gen_config} = Bumblebee.load_generation_config({:hf, model_id, revision: rev})
 
     gen_config =
       Bumblebee.configure(gen_config,
-        max_new_tokens: AppConfig.summary_max_tokens(),
-        min_new_tokens: AppConfig.summary_min_tokens()
+        max_new_tokens: AppConfig.summary_max_tokens()
       )
 
     Bumblebee.Text.generation(
@@ -75,8 +75,9 @@ defmodule WhatsAppAnalyzer.Servings do
 
   @spec build_classification_serving(String.t(), :sentiment) :: Nx.Serving.t()
   defp build_classification_serving(model_id, :sentiment) do
-    {:ok, model} = Bumblebee.load_model({:hf, model_id})
-    {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, model_id})
+    rev = "b34b9e93"
+    {:ok, model} = Bumblebee.load_model({:hf, model_id, revision: rev})
+    {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, model_id, revision: rev})
 
     Bumblebee.Text.text_classification(
       model,

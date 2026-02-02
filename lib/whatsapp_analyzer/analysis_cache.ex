@@ -30,7 +30,7 @@ defmodule WhatsAppAnalyzer.AnalysisCache do
 
   @impl true
   def init(_opts) do
-    _ = :ets.new(@table_name, [:set, :protected, :named_table])
+    _ = :ets.new(@table_name, [:set, :public, :named_table])
     schedule_cleanup()
     Logger.info("AnalysisCache started with #{@ttl}ms TTL")
     {:ok, %{}}

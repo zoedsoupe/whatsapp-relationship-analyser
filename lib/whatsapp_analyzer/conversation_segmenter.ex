@@ -12,7 +12,8 @@ defmodule WhatsAppAnalyzer.ConversationSegmenter do
   @doc """
   Segments conversations from a DataFrame and provides metrics.
 
-  Returns a list of conversation segments with metadata.
+  Returns a list of conversation segments with metadata, limited to top 50 by message count
+  and sorted chronologically.
   """
   @spec segment_conversations(DF.t()) :: [
           %{
@@ -22,12 +23,8 @@ defmodule WhatsAppAnalyzer.ConversationSegmenter do
             duration_minutes: float(),
             message_count: non_neg_integer(),
             participants: [String.t()],
-            summary: %{
-              avg_message_length: float(),
-              total_words: non_neg_integer(),
-              message_counts: %{optional(String.t()) => non_neg_integer()}
-            },
-            text_summary: nil
+            summary: map(),
+            text_summary: nil | String.t()
           }
         ]
   def segment_conversations(df) do
@@ -39,7 +36,9 @@ defmodule WhatsAppAnalyzer.ConversationSegmenter do
     |> S.distinct()
     |> S.to_list()
     |> Enum.map(&extract_and_build_segment(df, &1))
-    |> Enum.sort_by(& &1.start_time)
+    |> Enum.sort_by(& &1.message_count, :desc)
+    |> Enum.take(50)
+    |> Enum.sort_by(& &1.start_time, NaiveDateTime)
   end
 
   defp extract_and_build_segment(df, conv_id) do
@@ -73,11 +72,14 @@ defmodule WhatsAppAnalyzer.ConversationSegmenter do
     # Generate ML summary with fallback
     text_summary = generate_text_summary(messages)
 
+    # Ensure duration is always positive
+    duration_minutes = abs(NaiveDateTime.diff(end_time, start_time) / 60)
+
     %{
       conversation_id: conversation_id,
       start_time: start_time,
       end_time: end_time,
-      duration_minutes: NaiveDateTime.diff(end_time, start_time) / 60,
+      duration_minutes: duration_minutes,
       message_count: message_count,
       participants: participants,
       summary: summary,
@@ -85,43 +87,14 @@ defmodule WhatsAppAnalyzer.ConversationSegmenter do
     }
   end
 
-  defp generate_text_summary(_messages) do
-    # Summarization is now user-triggered via button, not automatic
-    nil
+  defp generate_text_summary(messages) do
+    # Generate ML summary automatically with fallback
+    WhatsAppAnalyzer.MLSummarizer.summarize_conversation_text(messages, enable_ml: false)
   end
 
-  defp summarize_metrics(conv_df) do
-    avg_message_length =
-      if DF.n_rows(conv_df) > 0 do
-        conv_df["message_length"]
-        |> S.mean()
-        |> Float.round(1)
-      else
-        0
-      end
-
-    total_words =
-      if DF.n_rows(conv_df) > 0 do
-        conv_df["word_count"]
-        |> S.sum()
-      else
-        0
-      end
-
-    # Count messages per sender
-    message_counts =
-      conv_df
-      |> DF.group_by("sender")
-      |> DF.summarise(count: count(sender))
-      |> DF.to_rows()
-      |> Enum.map(fn row -> {row["sender"], row["count"]} end)
-      |> Map.new()
-
-    %{
-      avg_message_length: avg_message_length,
-      total_words: total_words,
-      message_counts: message_counts
-    }
+  defp summarize_metrics(_conv_df) do
+    # Simplified - only keeping essential data
+    %{}
   end
 
   @doc """
@@ -135,7 +108,6 @@ defmodule WhatsAppAnalyzer.ConversationSegmenter do
     Duration: #{Float.round(segment.duration_minutes, 1)} minutes
     Messages: #{segment.message_count}
     Participants: #{Enum.join(segment.participants, ", ")}
-    Avg Message Length: #{segment.summary.avg_message_length} chars
     """
   end
 

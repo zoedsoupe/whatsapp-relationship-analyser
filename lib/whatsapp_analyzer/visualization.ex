@@ -20,7 +20,9 @@ defmodule WhatsAppAnalyzer.Visualization do
       |> DataFrame.summarise(count: count(message))
       |> DataFrame.to_rows()
 
-    Vl.new(title: "Frequência de Mensagens")
+    Vl.new(title: "Frequência de Mensagens", width: "container", height: 300)
+    |> Vl.config(autosize: %{type: "fit", contains: "padding"})
+    |> Vl.config(view: [stroke: nil])
     |> Vl.data_from_values(daily_counts)
     |> Vl.mark(:line, point: true)
     |> Vl.encode_field(:x, "date",
@@ -45,7 +47,9 @@ defmodule WhatsAppAnalyzer.Visualization do
       |> DataFrame.summarise(count: count(message))
       |> DataFrame.to_rows()
 
-    Vl.new(title: "Mensagens por Remetente")
+    Vl.new(title: "Mensagens por Remetente", width: "container", height: 250)
+    |> Vl.config(autosize: %{type: "fit", contains: "padding"})
+    |> Vl.config(view: [stroke: nil])
     |> Vl.data_from_values(sender_counts)
     |> Vl.mark(:bar)
     |> Vl.encode_field(:x, "sender", type: :nominal, title: "Remetente")
@@ -66,7 +70,9 @@ defmodule WhatsAppAnalyzer.Visualization do
       |> AnalysisHelpers.add_day_names()
       |> DataFrame.to_rows()
 
-    Vl.new(title: "Atividade de Mensagens por Horário")
+    Vl.new(title: "Atividade de Mensagens por Horário", width: "container", height: 400)
+    |> Vl.config(autosize: %{type: "fit", contains: "padding"})
+    |> Vl.config(view: [stroke: nil])
     |> Vl.data_from_values(messages_by_time)
     |> Vl.mark(:rect)
     |> Vl.encode_field(:x, "hour",
@@ -109,7 +115,9 @@ defmodule WhatsAppAnalyzer.Visualization do
       %{category: "Tempo de Resposta", value: scores.response_time}
     ]
 
-    Vl.new(title: "Indicadores de Relacionamento")
+    Vl.new(title: "Indicadores de Relacionamento", width: "container", height: 300)
+    |> Vl.config(autosize: %{type: "fit", contains: "padding"})
+    |> Vl.config(view: [stroke: nil])
     |> Vl.data_from_values(radar_data)
     |> Vl.transform(
       calculate: "0",
@@ -127,7 +135,6 @@ defmodule WhatsAppAnalyzer.Visualization do
       |> Vl.encode_field(:order, "category", type: :nominal)
     ])
     |> Vl.resolve(:scale, y: :shared)
-    |> Vl.config(view: [stroke: nil])
   end
 
   @doc """
@@ -145,7 +152,9 @@ defmodule WhatsAppAnalyzer.Visualization do
       }
     ]
 
-    Vl.new(title: "Classificação do Relacionamento")
+    Vl.new(title: "Classificação do Relacionamento", width: "container", height: 200)
+    |> Vl.config(autosize: %{type: "fit", contains: "padding"})
+    |> Vl.config(view: [stroke: nil])
     |> Vl.data_from_values(class_data)
     |> Vl.mark(:bar)
     |> Vl.encode_field(:x, "score",
@@ -186,7 +195,9 @@ defmodule WhatsAppAnalyzer.Visualization do
         ]
       end)
 
-    Vl.new(title: "Evolução de Sentimento", width: 600, height: 300)
+    Vl.new(title: "Evolução de Sentimento", width: "container", height: 300)
+    |> Vl.config(autosize: %{type: "fit", contains: "padding"})
+    |> Vl.config(view: [stroke: nil])
     |> Vl.data_from_values(sentiment_by_date)
     |> Vl.mark(:line, point: true)
     |> Vl.encode_field(:x, "date",
@@ -216,9 +227,11 @@ defmodule WhatsAppAnalyzer.Visualization do
     # Stopwords em português
     stopwords = pt_stopwords()
 
-    # Extrai e conta palavras
+    # Extrai e conta palavras (somente mensagens de texto)
+    text_df = DataFrame.filter_with(df, &Explorer.Series.equal(&1["message_type"], "text"))
+
     messages =
-      df["message"]
+      text_df["message"]
       |> Explorer.Series.to_list()
 
     word_counts =
@@ -233,7 +246,9 @@ defmodule WhatsAppAnalyzer.Visualization do
       |> Enum.take(20)
       |> Enum.map(fn {word, count} -> %{word: word, frequency: count} end)
 
-    Vl.new(title: "Top 20 Palavras Mais Frequentes", width: 500, height: 400)
+    Vl.new(title: "Top 20 Palavras Mais Frequentes", width: "container", height: 400)
+    |> Vl.config(autosize: %{type: "fit", contains: "padding"})
+    |> Vl.config(view: [stroke: nil])
     |> Vl.data_from_values(word_counts)
     |> Vl.mark(:bar)
     |> Vl.encode_field(:y, "word",
@@ -264,7 +279,9 @@ defmodule WhatsAppAnalyzer.Visualization do
       |> DataFrame.summarise(count: count(message))
       |> DataFrame.to_rows()
 
-    Vl.new(title: "Fluxo da Conversa", width: 600, height: 300)
+    Vl.new(title: "Fluxo da Conversa", width: "container", height: 300)
+    |> Vl.config(autosize: %{type: "fit", contains: "padding"})
+    |> Vl.config(view: [stroke: nil])
     |> Vl.data_from_values(flow_data)
     |> Vl.mark(:area)
     |> Vl.encode_field(:x, "date",

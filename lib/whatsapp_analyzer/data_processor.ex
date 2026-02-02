@@ -50,11 +50,16 @@ defmodule WhatsAppAnalyzer.DataProcessor do
     else
       df
       |> add_time_features()
-      |> add_time_features()
       |> add_message_length()
       |> add_response_time()
       |> add_conversation_markers()
+      |> add_sentiment_scores()
     end
+  end
+
+  @spec add_sentiment_scores(DF.t()) :: DF.t()
+  defp add_sentiment_scores(df) do
+    WhatsAppAnalyzer.SentimentScorer.add_sentiment_columns(df)
   end
 
   @spec add_time_features(DF.t()) :: DF.t()
@@ -97,11 +102,19 @@ defmodule WhatsAppAnalyzer.DataProcessor do
   end
 
   @spec add_response_time(DF.t()) :: DF.t()
-  defp add_response_time(df) when df.n_rows == 0 do
+  defp add_response_time(df) do
+    if DF.n_rows(df) == 0 do
+      add_response_time_empty(df)
+    else
+      add_response_time_filled(df)
+    end
+  end
+
+  defp add_response_time_empty(df) do
     DF.put(df, "response_time_minutes", S.from_list([]))
   end
 
-  defp add_response_time(df) do
+  defp add_response_time_filled(df) do
     sorted_df = DF.sort_by(df, datetime)
 
     response_times =
@@ -121,13 +134,21 @@ defmodule WhatsAppAnalyzer.DataProcessor do
   end
 
   @spec add_conversation_markers(DF.t()) :: DF.t()
-  defp add_conversation_markers(df) when df.n_rows == 0 do
+  defp add_conversation_markers(df) do
+    if DF.n_rows(df) == 0 do
+      add_conversation_markers_empty(df)
+    else
+      add_conversation_markers_filled(df)
+    end
+  end
+
+  defp add_conversation_markers_empty(df) do
     df
     |> DF.put("new_conversation", S.from_list([]))
     |> DF.put("conversation_id", S.from_list([]))
   end
 
-  defp add_conversation_markers(df) do
+  defp add_conversation_markers_filled(df) do
     sorted_df = DF.sort_by(df, datetime)
 
     timestamps =

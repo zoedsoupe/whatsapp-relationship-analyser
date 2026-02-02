@@ -1,10 +1,10 @@
 defmodule WhatsAppAnalyzerWeb.Endpoint do
-  use Phoenix.Endpoint, otp_app: :whatsapp_analyser
+  use Phoenix.Endpoint, otp_app: :whatsapp_analyzer
 
   # Serve at "/" the static files from "priv/static" directory.
   plug(Plug.Static,
     at: "/",
-    from: :whatsapp_analyser,
+    from: :whatsapp_analyzer,
     gzip: false,
     only: ~w(css fonts images js favicon.ico robots.txt)
   )
@@ -31,7 +31,7 @@ defmodule WhatsAppAnalyzerWeb.Endpoint do
 
   plug(Plug.Session,
     store: :cookie,
-    key: "_whatsapp_analyser_key",
+    key: "_whatsapp_analyzer_key",
     signing_salt: "YourSigningSalt"
   )
 

@@ -26,7 +26,7 @@ defmodule WhatsAppAnalyzerWeb.ConnCase do
     conn = %{
       conn
       | secret_key_base:
-          Application.get_env(:whatsapp_analyser, WhatsAppAnalyzerWeb.Endpoint)[:secret_key_base]
+          Application.get_env(:whatsapp_analyzer, WhatsAppAnalyzerWeb.Endpoint)[:secret_key_base]
     }
 
     {:ok, conn: conn}

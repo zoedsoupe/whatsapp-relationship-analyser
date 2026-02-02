@@ -2,7 +2,7 @@ import Config
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
-config :whatsapp_analyser, WhatsAppAnalyzerWeb.Endpoint,
+config :whatsapp_analyzer, WhatsAppAnalyzerWeb.Endpoint,
   http: [port: 4000],
   debug_errors: true,
   code_reloader: true,

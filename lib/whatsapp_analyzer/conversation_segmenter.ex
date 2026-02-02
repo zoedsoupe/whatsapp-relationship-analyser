@@ -31,27 +31,21 @@ defmodule WhatsAppAnalyzer.ConversationSegmenter do
           }
         ]
   def segment_conversations(df) do
-    if DF.n_rows(df) == 0 do
-      []
-    else
-      # Get unique conversation IDs
-      conversation_ids =
-        df["conversation_id"]
-        |> S.distinct()
-        |> S.to_list()
+    if DF.n_rows(df) == 0, do: [], else: process_segments(df)
+  end
 
-      # Process each conversation
-      conversation_ids
-      |> Enum.map(fn conv_id ->
-        conv_df =
-          DF.filter_with(df, fn rows ->
-            S.equal(rows["conversation_id"], conv_id)
-          end)
+  defp process_segments(df) do
+    df["conversation_id"]
+    |> S.distinct()
+    |> S.to_list()
+    |> Enum.map(&extract_and_build_segment(df, &1))
+    |> Enum.sort_by(& &1.start_time)
+  end
 
-        build_segment_metadata(conv_df)
-      end)
-      |> Enum.sort_by(& &1.start_time)
-    end
+  defp extract_and_build_segment(df, conv_id) do
+    df
+    |> DF.filter_with(fn rows -> S.equal(rows["conversation_id"], conv_id) end)
+    |> build_segment_metadata()
   end
 
   defp build_segment_metadata(conv_df) do
@@ -71,6 +65,14 @@ defmodule WhatsAppAnalyzer.ConversationSegmenter do
 
     summary = summarize_metrics(conv_df)
 
+    # Extract messages for ML summarization
+    messages =
+      conv_df["message"]
+      |> S.to_list()
+
+    # Generate ML summary with fallback
+    text_summary = generate_text_summary(messages)
+
     %{
       conversation_id: conversation_id,
       start_time: start_time,
@@ -79,9 +81,13 @@ defmodule WhatsAppAnalyzer.ConversationSegmenter do
       message_count: message_count,
       participants: participants,
       summary: summary,
-      # Optional ML summary, populated on-demand
-      text_summary: nil
+      text_summary: text_summary
     }
+  end
+
+  defp generate_text_summary(_messages) do
+    # Summarization is now user-triggered via button, not automatic
+    nil
   end
 
   defp summarize_metrics(conv_df) do

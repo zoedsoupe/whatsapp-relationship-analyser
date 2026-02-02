@@ -1,55 +1,89 @@
 defmodule WhatsAppAnalyzer.MLSummarizer do
   @moduledoc """
-  Optional ML-based conversation summarization using Bumblebee.
+  ML-based conversation summarization using Bumblebee.
 
   This module provides text summarization capabilities for conversation
-  segments. It's only used when explicitly enabled by the user.
+  segments using the facebook/bart-large-cnn model.
   """
+
+  require Logger
+
+  @max_input_length 1024
 
   @doc """
   Summarizes conversation text using a pre-trained model.
 
   ## Options
-    - `:enable_ml` - Set to true to enable ML summarization (default: false)
+    - `:enable_ml` - Set to true to enable ML summarization (default: true)
     - `:max_length` - Maximum length of summary in tokens (default: 100)
     - `:min_length` - Minimum length of summary in tokens (default: 30)
 
   ## Returns
     - Summary text string if ML is enabled
-    - nil if ML is disabled
+    - nil if ML is disabled or an error occurs
   """
   def summarize_conversation_text(messages, opts \\ []) do
-    if Keyword.get(opts, :enable_ml, false) do
-      perform_summarization(messages, opts)
+    if Keyword.get(opts, :enable_ml, true) do
+      perform_ml_summarization(messages)
     else
       nil
     end
   end
 
-  defp perform_summarization(_messages, opts) do
-    # TODO: Implement actual Bumblebee summarization
-    # This would require:
-    # 1. Loading a summarization model (e.g., BART, T5)
-    # 2. Concatenating messages into a single text
-    # 3. Running inference
-    # 4. Returning the summary
+  defp perform_ml_summarization(messages) when is_list(messages) do
+    text = prepare_text(messages)
+    do_ml_summarization(text, messages)
+  end
 
-    # For now, return a placeholder
-    max_length = Keyword.get(opts, :max_length, 100)
-    min_length = Keyword.get(opts, :min_length, 30)
+  defp perform_ml_summarization(_), do: nil
 
-    """
-    [ML Summarization Not Yet Implemented]
+  defp do_ml_summarization("", _messages), do: nil
 
-    This would use Bumblebee to generate a summary of the conversation
-    with max_length: #{max_length}, min_length: #{min_length}.
+  defp do_ml_summarization(text, messages) when is_binary(text) do
+    case run_ml_model(text) do
+      {:ok, summary} -> summary
+      {:error, _} -> fallback_summary(messages)
+    end
+  end
 
-    To implement:
-    1. Load a summarization model (e.g., facebook/bart-large-cnn)
-    2. Prepare input text from messages
-    3. Run model inference
-    4. Return generated summary
-    """
+  defp run_ml_model(text) do
+    try do
+      result = Nx.Serving.batched_run(WhatsAppAnalyzer.Serving.Summarizer, text)
+      parse_ml_result(result)
+    rescue
+      e in [RuntimeError, ArgumentError, FunctionClauseError] ->
+        Logger.warning("ML failed: #{Exception.message(e)}")
+        {:error, e}
+    end
+  end
+
+  defp parse_ml_result(%{results: [%{text: summary}]}) when is_binary(summary), do: {:ok, summary}
+
+  defp parse_ml_result(_result) do
+    Logger.warning("ML summarization returned unexpected format")
+    {:error, :invalid_format}
+  end
+
+  # Prepares conversation text for summarization
+  defp prepare_text(messages) do
+    messages
+    |> Enum.map_join(" ", fn
+      msg when is_binary(msg) -> msg
+      %{message: msg} -> msg
+      _ -> ""
+    end)
+    |> String.slice(0, @max_input_length)
+  end
+
+  # Fallback summarization using keyword extraction
+  defp fallback_summary(messages) do
+    topics = extract_key_topics(messages, 5)
+
+    if Enum.empty?(topics) do
+      "Conversation with #{length(messages)} messages"
+    else
+      "Discussion about: #{Enum.join(topics, ", ")}"
+    end
   end
 
   @doc """

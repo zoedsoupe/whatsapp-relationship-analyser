@@ -1,7 +1,10 @@
 defmodule WhatsAppAnalyzerWeb.AnalysisController do
   use WhatsAppAnalyzerWeb, :controller
 
-  @ets_table :analysis_results
+  plug(:put_root_layout, false)
+  plug(:put_layout, false)
+
+  alias WhatsAppAnalyzer.AnalysisCache
 
   @spec create(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def create(conn, %{"upload" => %Plug.Upload{path: path}}) do
@@ -30,171 +33,101 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
 
   @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def show(conn, %{"id" => id}) do
-    case :ets.lookup(@ets_table, id) do
-      [{^id, results}] ->
-        html(conn, render_results_page(conn, results, id))
+    case AnalysisCache.get(id) do
+      {:ok, results} ->
+        render(conn, :show, results: results, analysis_id: id)
 
-      [] ->
+      {:error, :not_found} ->
         conn
         |> put_flash(:error, "Analysis not found or expired.")
         |> redirect(to: Routes.page_path(conn, :index))
     end
   end
 
-  @spec render_results_page(Plug.Conn.t(), map(), String.t()) :: String.t()
-  defp render_results_page(conn, results, _analysis_id) do
-    alias WhatsAppAnalyzerWeb.VegaLiteHelper
+  # Download action for temporal summary
+  def download_summary(conn, %{"id" => id, "format" => format}) do
+    case AnalysisCache.get(id) do
+      {:ok, results} ->
+        content = results.temporal_summary.summary_text
 
-    """
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8"/>
-        <title>Analysis Results - WhatsApp Analyzer</title>
-        <link rel="stylesheet" href="/css/app.css"/>
-        <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
-        <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
-        <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
-      </head>
-      <body>
-        <header>
-          <nav>
-            <h1>WhatsApp Relationship Analyzer</h1>
-          </nav>
-        </header>
+        case format do
+          "txt" ->
+            conn
+            |> put_resp_content_type("text/plain")
+            |> put_resp_header(
+              "content-disposition",
+              ~s(attachment; filename="temporal_summary.txt")
+            )
+            |> send_resp(200, content)
 
-        <main>
-          <div class="container">
-            <div class="analysis-header">
-              <h2>Analysis Results</h2>
-              <a href="#{Routes.page_path(conn, :index)}" class="btn-secondary">Analyze Another Chat</a>
-            </div>
+          "md" ->
+            conn
+            |> put_resp_content_type("text/markdown")
+            |> put_resp_header(
+              "content-disposition",
+              ~s(attachment; filename="temporal_summary.md")
+            )
+            |> send_resp(200, content)
 
-            <!-- Relationship Classification -->
-            <div class="section">
-              <h3>Relationship Classification</h3>
-              <div class="classification-result">
-                <div class="classification-badge #{results.relationship_classification}">
-                  #{String.upcase(to_string(results.relationship_classification))}
-                </div>
-                <p class="confidence">Confidence Score: #{results.relationship_score}/100</p>
-              </div>
-            </div>
+          _ ->
+            conn
+            |> put_flash(:error, "Invalid format")
+            |> redirect(to: Routes.analysis_path(conn, :show, id))
+        end
 
-            <!-- Metrics Overview -->
-            <div class="section">
-              <h3>Key Metrics</h3>
-              <div class="metrics-grid">
-                <div class="metric-card">
-                  <h4>Total Messages</h4>
-                  <p class="metric-value">#{results.total_messages}</p>
-                </div>
-                <div class="metric-card">
-                  <h4>Total Days</h4>
-                  <p class="metric-value">#{results.total_days}</p>
-                </div>
-                <div class="metric-card">
-                  <h4>Avg Messages/Day</h4>
-                  <p class="metric-value">#{results.avg_messages_per_day}</p>
-                </div>
-                <div class="metric-card">
-                  <h4>Response Time</h4>
-                  <p class="metric-value">#{Float.round(results.avg_response_time, 1)} min</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Charts -->
-            <div class="section">
-              <h3>Messages by Sender</h3>
-              #{VegaLiteHelper.embed_chart(results.sender_stats_chart, "sender-chart") |> Phoenix.HTML.safe_to_string()}
-            </div>
-
-            <!-- Sentiment -->
-            <div class="section">
-              <h3>Sentiment Overview</h3>
-              <div class="metrics-grid">
-                <div class="metric-card">
-                  <h4>Romantic Indicators</h4>
-                  <p class="metric-value">#{results.sentiment.romantic_count}</p>
-                </div>
-                <div class="metric-card">
-                  <h4>Future Planning</h4>
-                  <p class="metric-value">#{results.sentiment.future_planning_count}</p>
-                </div>
-                <div class="metric-card">
-                  <h4>Intimacy Indicators</h4>
-                  <p class="metric-value">#{results.sentiment.intimacy_count}</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Conversation Segments -->
-            #{if length(results.conversation_segments) > 0 do
-      render_conversation_segments(results.conversation_segments)
-    else
-      ""
-    end}
-          </div>
-        </main>
-      </body>
-    </html>
-    """
+      {:error, :not_found} ->
+        conn
+        |> put_flash(:error, "Analysis not found")
+        |> redirect(to: Routes.page_path(conn, :index))
+    end
   end
 
-  @spec render_conversation_segments([map()]) :: String.t()
-  defp render_conversation_segments(segments) do
-    """
-    <div class="section">
-      <h3>Conversation Segments</h3>
-      <p>Total Conversations: #{length(segments)}</p>
+  @spec generate_summaries(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def generate_summaries(conn, %{"id" => id}) do
+    case WhatsAppAnalyzer.SummaryGenerator.generate_summaries_async(id) do
+      {:ok, :started} ->
+        conn
+        |> put_flash(:info, "Generating ML summaries... This may take a few moments.")
+        |> redirect(to: Routes.analysis_path(conn, :show, id))
 
-      <div class="segments-list">
-        #{Enum.take(segments, 10) |> Enum.map(&render_segment/1) |> Enum.join("\n")}
-      </div>
-
-      #{if length(segments) > 10 do
-      ~s(<p class="note">Showing first 10 of #{length(segments)} conversations</p>)
-    else
-      ""
-    end}
-    </div>
-    """
+      {:error, :not_found} ->
+        conn
+        |> put_flash(:error, "Analysis not found")
+        |> redirect(to: Routes.page_path(conn, :index))
+    end
   end
 
-  @spec render_segment(map()) :: String.t()
-  defp render_segment(segment) do
-    """
-    <div class="segment-card">
-      <h4>Conversation ##{segment.conversation_id}</h4>
-      <p><strong>Time:</strong> #{Calendar.strftime(segment.start_time, "%Y-%m-%d %H:%M")} - #{Calendar.strftime(segment.end_time, "%Y-%m-%d %H:%M")}</p>
-      <p><strong>Messages:</strong> #{segment.message_count}</p>
-      <p><strong>Participants:</strong> #{Enum.join(segment.participants, ", ")}</p>
-    </div>
-    """
+  @spec summary_status(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def summary_status(conn, %{"id" => id}) do
+    {:ok, status} = WhatsAppAnalyzer.SummaryGenerator.get_status(id)
+    json(conn, status)
   end
 
   @spec process_and_store(Path.t(), String.t()) :: :ok | {:error, String.t()}
   defp process_and_store(file_path, analysis_id) do
-    try do
-      # Use the unified API which handles both regular and streaming parsing
-      analysis_results = WhatsAppAnalyzer.analyze_chat(file_path)
-
-      # Check if analysis was successful
-      if Map.has_key?(analysis_results, :error) do
-        {:error, analysis_results.error}
-      else
-        :ets.insert(@ets_table, {analysis_id, serialize_results(analysis_results)})
-        :ok
-      end
-    rescue
-      e ->
-        {:error, Exception.message(e)}
+    with {:ok, results} <- analyze_file(file_path),
+         :ok <- validate_results(results),
+         :ok <- AnalysisCache.put(analysis_id, serialize_results(results)) do
+      :ok
     end
   end
 
+  defp analyze_file(path) do
+    try do
+      {:ok, WhatsAppAnalyzer.analyze_chat(path)}
+    rescue
+      e in [File.Error, ArgumentError] -> {:error, Exception.message(e)}
+    end
+  end
+
+  defp validate_results(%{error: err}), do: {:error, err}
+  defp validate_results(_), do: :ok
+
   @spec serialize_results(map()) :: map()
   defp serialize_results(analysis_results) do
+    # Extract sentiment excerpts from the data
+    sentiment_excerpts = extract_sentiment_excerpts(analysis_results.data)
+
     # Convert analysis results to a serializable format for display
     %{
       total_messages: analysis_results.analysis.total_messages,
@@ -209,12 +142,31 @@ defmodule WhatsAppAnalyzerWeb.AnalysisController do
       sender_stats_chart: analysis_results.visualizations.sender_distribution,
       hourly_chart: analysis_results.visualizations.time_heatmap,
       daily_chart: analysis_results.visualizations.message_frequency,
+      # New visualizations
+      sentiment_timeline_chart: analysis_results.visualizations.sentiment_timeline,
+      word_frequency_chart: analysis_results.visualizations.word_frequency,
+      conversation_flow_chart: analysis_results.visualizations.conversation_flow,
       sentiment: %{
         romantic_count: analysis_results.analysis.romantic_indicators.total_indicators,
         future_planning_count: analysis_results.analysis.future_planning.total_indicators,
         intimacy_count: analysis_results.analysis.intimacy_indicators.total_indicators
       },
-      conversation_segments: analysis_results.conversation_segments
+      sentiment_excerpts: sentiment_excerpts,
+      conversation_segments: analysis_results.conversation_segments,
+      temporal_summary: analysis_results.temporal_summary,
+      # Store DataFrame for later ML summarization
+      data: analysis_results.data
+    }
+  end
+
+  @spec extract_sentiment_excerpts(Explorer.DataFrame.t()) :: map()
+  defp extract_sentiment_excerpts(df) do
+    alias WhatsAppAnalyzer.SentimentScorer
+
+    %{
+      romantic: SentimentScorer.extract_top_excerpts(df, :romantic, 10),
+      intimacy: SentimentScorer.extract_top_excerpts(df, :intimacy, 10),
+      future_planning: SentimentScorer.extract_top_excerpts(df, :future_planning, 10)
     }
   end
 end

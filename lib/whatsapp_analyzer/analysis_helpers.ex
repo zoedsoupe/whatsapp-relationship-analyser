@@ -7,7 +7,7 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
   require Explorer.DataFrame, as: DF
   require Explorer.Series, as: S
 
-  alias WhatsAppAnalyzer.Config
+  alias WhatsAppAnalyzer.TimeHelpers
 
   @doc """
   Generic indicator counting function.
@@ -21,8 +21,7 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
   def count_indicators(df, indicator_list) do
     indicators_regex =
       indicator_list
-      |> Enum.map(&Regex.escape/1)
-      |> Enum.join("|")
+      |> Enum.map_join("|", &Regex.escape/1)
       |> Regex.compile!("i")
 
     indicator_counts =
@@ -74,17 +73,20 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
 
     Enum.map(senders, fn sender ->
       sender_df = DF.filter_with(df, fn rows -> S.equal(rows["sender"], sender) end)
-
-      value =
-        case aggregation do
-          :count -> DF.n_rows(sender_df)
-          :sum -> if DF.n_rows(sender_df) > 0, do: S.sum(sender_df[column]), else: 0
-          :mean -> if DF.n_rows(sender_df) > 0, do: S.mean(sender_df[column]), else: nil
-        end
-
+      value = compute_aggregation(sender_df, column, aggregation)
       {sender, value}
     end)
     |> Map.new()
+  end
+
+  defp compute_aggregation(sender_df, _column, :count), do: DF.n_rows(sender_df)
+
+  defp compute_aggregation(sender_df, column, :sum) do
+    if DF.n_rows(sender_df) > 0, do: S.sum(sender_df[column]), else: 0
+  end
+
+  defp compute_aggregation(sender_df, column, :mean) do
+    if DF.n_rows(sender_df) > 0, do: S.mean(sender_df[column]), else: nil
   end
 
   @doc """
@@ -105,7 +107,7 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
   def add_day_names(df) do
     day_name =
       df["day_of_week"]
-      |> S.transform(fn day -> Config.day_name(day) end)
+      |> S.transform(fn day -> TimeHelpers.day_name(day) end)
 
     DF.put(df, "day_name", day_name)
   end
@@ -117,7 +119,7 @@ defmodule WhatsAppAnalyzer.AnalysisHelpers do
   def add_time_period(df) do
     time_period =
       df["hour"]
-      |> S.transform(fn hour -> Config.time_period(hour) end)
+      |> S.transform(fn hour -> TimeHelpers.time_period(hour) end)
 
     DF.put(df, "time_period", time_period)
   end

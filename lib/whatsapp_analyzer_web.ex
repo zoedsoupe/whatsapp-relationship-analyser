@@ -19,7 +19,9 @@ defmodule WhatsAppAnalyzerWeb do
 
   def controller do
     quote do
-      use Phoenix.Controller, namespace: WhatsAppAnalyzerWeb
+      use Phoenix.Controller,
+        namespace: WhatsAppAnalyzerWeb,
+        formats: [:html, :json]
 
       import Plug.Conn
       alias WhatsAppAnalyzerWeb.Router.Helpers, as: Routes
@@ -59,7 +61,6 @@ defmodule WhatsAppAnalyzerWeb do
     quote do
       import Phoenix.HTML
       import Phoenix.HTML.Form
-      use Phoenix.HTML
 
       alias WhatsAppAnalyzerWeb.Router.Helpers, as: Routes
     end

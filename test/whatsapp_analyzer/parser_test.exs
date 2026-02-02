@@ -39,7 +39,7 @@ defmodule WhatsAppAnalyzer.ParserTest do
       path = Path.join(@fixtures_path, "normal_chat.txt")
       messages = Parser.parse_file(path)
 
-      assert length(messages) > 0
+      assert messages != []
       assert Enum.any?(messages, &(&1.sender == "Alice"))
       assert Enum.any?(messages, &(&1.sender == "Bob"))
     end
@@ -60,7 +60,7 @@ defmodule WhatsAppAnalyzer.ParserTest do
       path = Path.join(@fixtures_path, "romantic_chat.txt")
       messages = Parser.parse_file(path)
 
-      assert length(messages) > 0
+      assert messages != []
 
       romantic_message = Enum.find(messages, &String.contains?(&1.message, "amor"))
       assert romantic_message != nil

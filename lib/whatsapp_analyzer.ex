@@ -7,12 +7,13 @@ defmodule WhatsAppAnalyzer do
   """
 
   alias WhatsAppAnalyzer.{
-    Config,
+    AppConfig,
     DataProcessor,
     RelationshipAnalyzer,
     Visualization,
     StreamingParser,
-    ConversationSegmenter
+    ConversationSegmenter,
+    TemporalSummarizer
   }
 
   require Explorer.DataFrame, as: DF
@@ -44,17 +45,23 @@ defmodule WhatsAppAnalyzer do
         sender_distribution: Visualization.sender_distribution_chart(processed_data),
         time_heatmap: Visualization.time_of_day_heatmap(processed_data),
         relationship_radar: Visualization.relationship_radar_chart(relationship_analysis),
-        classification: Visualization.relationship_classification_chart(relationship_analysis)
+        classification: Visualization.relationship_classification_chart(relationship_analysis),
+        # New visualizations
+        sentiment_timeline: Visualization.sentiment_timeline_chart(processed_data),
+        word_frequency: Visualization.word_frequency_chart(processed_data),
+        conversation_flow: Visualization.conversation_flow_chart(processed_data)
       }
 
       conversation_segments = ConversationSegmenter.segment_conversations(processed_data)
+      temporal_summary = TemporalSummarizer.generate_full_summary(processed_data)
 
       %{
         data: processed_data,
         analysis: relationship_analysis,
         visualizations: visualizations,
         summary: RelationshipAnalyzer.relationship_summary(processed_data),
-        conversation_segments: conversation_segments
+        conversation_segments: conversation_segments,
+        temporal_summary: temporal_summary
       }
     end
   end
@@ -67,7 +74,7 @@ defmodule WhatsAppAnalyzer do
     force_streaming = Keyword.get(opts, :streaming, false)
     file_size = File.stat!(file_path).size
 
-    if force_streaming || file_size > Config.large_file_threshold() do
+    if force_streaming || file_size > AppConfig.large_file_threshold() do
       StreamingParser.parse_file_stream(file_path)
     else
       DataProcessor.process_file(file_path)

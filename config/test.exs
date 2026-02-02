@@ -2,7 +2,7 @@ import Config
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
-config :whatsapp_analyser, WhatsAppAnalyzerWeb.Endpoint,
+config :whatsapp_analyzer, WhatsAppAnalyzerWeb.Endpoint,
   http: [port: 4002],
   server: false
 

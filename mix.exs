@@ -3,12 +3,18 @@ defmodule WhatsAppAnalyzer.MixProject do
 
   def project do
     [
-      app: :whatsapp_analyser,
+      app: :whatsapp_analyzer,
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      elixirc_paths: elixirc_paths(Mix.env())
+      elixirc_paths: elixirc_paths(Mix.env()),
+      dialyzer: [
+        plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+        plt_add_apps: [:mix, :ex_unit],
+        flags: [:error_handling, :underspecs, :unknown, :unmatched_returns],
+        ignore_warnings: ".dialyzer_ignore.exs"
+      ]
     ]
   end
 
@@ -29,6 +35,7 @@ defmodule WhatsAppAnalyzer.MixProject do
       # Phoenix core (no LiveView)
       {:phoenix, "~> 1.7.14"},
       {:phoenix_html, "~> 4.1"},
+      {:phoenix_live_view, "~> 1.0"},
       {:plug_cowboy, "~> 2.7"},
       {:jason, "~> 1.4"},
 

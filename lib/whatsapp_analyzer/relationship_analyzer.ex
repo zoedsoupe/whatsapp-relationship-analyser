@@ -6,8 +6,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
   require Explorer.DataFrame, as: DF
   require Explorer.Series, as: S
 
-  alias WhatsAppAnalyzer.Config
-  alias WhatsAppAnalyzer.AnalysisHelpers
+  alias WhatsAppAnalyzer.{AnalysisHelpers, AppConfig, Keywords, TimeHelpers}
 
   @doc """
   Analyzes a DF with conversation data to extract relationship indicators.
@@ -23,9 +22,9 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
       messaging_frequency: calculate_messaging_frequency(df),
       response_patterns: analyze_response_patterns(df),
       conversation_initiation: analyze_conversation_initiation(df),
-      romantic_indicators: AnalysisHelpers.count_indicators(df, Config.romantic_indicators()),
-      future_planning: AnalysisHelpers.count_indicators(df, Config.future_planning()),
-      intimacy_indicators: AnalysisHelpers.count_indicators(df, Config.intimacy_indicators()),
+      romantic_indicators: AnalysisHelpers.count_indicators(df, Keywords.romantic()),
+      future_planning: AnalysisHelpers.count_indicators(df, Keywords.future_planning()),
+      intimacy_indicators: AnalysisHelpers.count_indicators(df, Keywords.intimacy()),
       time_of_day_patterns: analyze_time_of_day(df),
       day_of_week_patterns: analyze_day_of_week(df),
       relationship_classification: classify_relationship(df)
@@ -41,7 +40,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
     message_counts = AnalysisHelpers.aggregate_by_sender(df, "sender", :count)
     avg_lengths = AnalysisHelpers.aggregate_by_sender(df, "message_length", :mean)
 
-    romantic_count = AnalysisHelpers.count_indicators(df, Config.romantic_indicators())
+    romantic_count = AnalysisHelpers.count_indicators(df, Keywords.romantic())
 
     initiations = analyze_conversation_initiation(df)
 
@@ -184,10 +183,10 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
     percentage_distribution = AnalysisHelpers.percentage_distribution(day_distribution, total)
 
     weekday_count =
-      Enum.sum(for day <- 1..5, do: Map.get(day_distribution, Config.day_name(day), 0))
+      Enum.sum(for day <- 1..5, do: Map.get(day_distribution, TimeHelpers.day_name(day), 0))
 
     weekend_count =
-      Enum.sum(for day <- 6..7, do: Map.get(day_distribution, Config.day_name(day), 0))
+      Enum.sum(for day <- 6..7, do: Map.get(day_distribution, TimeHelpers.day_name(day), 0))
 
     %{
       count_by_day: day_distribution,
@@ -220,30 +219,31 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
   end
 
   defp calculate_classification_components(df) do
-    romantic_score = AnalysisHelpers.count_indicators(df, Config.romantic_indicators())
-    intimacy_score = AnalysisHelpers.count_indicators(df, Config.intimacy_indicators())
-    future_planning_score = AnalysisHelpers.count_indicators(df, Config.future_planning())
+    romantic_score = AnalysisHelpers.count_indicators(df, Keywords.romantic())
+    intimacy_score = AnalysisHelpers.count_indicators(df, Keywords.intimacy())
+    future_planning_score = AnalysisHelpers.count_indicators(df, Keywords.future_planning())
 
     %{messages_per_day: messages_per_day} = calculate_messaging_frequency(df)
     response_patterns = analyze_response_patterns(df)
 
-    factors = Config.score_normalization()
+    romantic_multiplier = AppConfig.romantic_multiplier()
+    intimacy_multiplier = AppConfig.intimacy_multiplier()
+    future_multiplier = AppConfig.future_multiplier()
+    max_score = 100
 
     romantic_normalized =
-      min(romantic_score.percentage_of_messages * factors.romantic_multiplier, factors.max_score)
+      min(romantic_score.percentage_of_messages * romantic_multiplier, max_score)
 
     intimacy_normalized =
-      min(intimacy_score.percentage_of_messages * factors.intimacy_multiplier, factors.max_score)
+      min(intimacy_score.percentage_of_messages * intimacy_multiplier, max_score)
 
     future_normalized =
-      min(
-        future_planning_score.percentage_of_messages * factors.future_multiplier,
-        factors.max_score
-      )
+      min(future_planning_score.percentage_of_messages * future_multiplier, max_score)
 
-    frequency_normalized = min(messages_per_day / factors.frequency_base * 100, factors.max_score)
+    # Frequência base = 20 msgs/dia (100%)
+    frequency_normalized = min(messages_per_day / 20 * 100, max_score)
 
-    response_normalized = normalize_response_time(response_patterns.overall_avg_minutes, factors)
+    response_normalized = normalize_response_time(response_patterns.overall_avg_minutes)
 
     %{
       romantic_normalized: romantic_normalized,
@@ -255,25 +255,26 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
   end
 
   defp calculate_weighted_score(components) do
-    weights = Config.classification_weights()
+    weights = AppConfig.classification_weights()
 
-    components.romantic_normalized * weights.romantic_indicators +
+    components.romantic_normalized * weights.romantic +
       components.intimacy_normalized * weights.intimacy +
       components.future_normalized * weights.future_planning +
-      components.frequency_normalized * weights.messaging_frequency +
+      components.frequency_normalized * weights.frequency +
       components.response_normalized * weights.response_time
   end
 
-  @spec normalize_response_time(nil | number(), map()) :: number()
-  defp normalize_response_time(nil, _factors), do: 50
+  @spec normalize_response_time(nil | float()) :: number()
+  defp normalize_response_time(nil), do: 50
 
-  defp normalize_response_time(avg_minutes, factors) do
-    max(100 - avg_minutes * factors.response_sensitivity, 0)
+  defp normalize_response_time(avg_minutes) do
+    # Sensibilidade = 2 (quanto maior, mais penaliza tempo de resposta)
+    max(100 - avg_minutes * 2, 0)
   end
 
   @spec classify_by_score(number()) :: String.t()
-  defp classify_by_score(score) when score >= 70, do: "Romantic"
-  defp classify_by_score(score) when score >= 40, do: "Close Friend"
-  defp classify_by_score(score) when score >= 20, do: "Friend"
-  defp classify_by_score(_score), do: "Acquaintance"
+  defp classify_by_score(score) when score >= 70, do: "Romântico"
+  defp classify_by_score(score) when score >= 40, do: "Amigo Próximo"
+  defp classify_by_score(score) when score >= 20, do: "Amigo"
+  defp classify_by_score(_score), do: "Conhecido"
 end

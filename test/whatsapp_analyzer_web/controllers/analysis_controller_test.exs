@@ -45,7 +45,9 @@ defmodule WhatsAppAnalyzerWeb.AnalysisControllerTest do
       conn = post(conn, Routes.analysis_path(conn, :create), %{})
 
       assert redirected_to(conn) == Routes.page_path(conn, :index)
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Please upload a WhatsApp chat export file."
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
+               "Please upload a WhatsApp chat export file."
     end
   end
 

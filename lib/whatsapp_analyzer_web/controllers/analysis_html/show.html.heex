@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>Analysis Results - WhatsApp Analyzer</title>
+    <link rel="stylesheet" href="/css/app.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+  </head>
+  <body>
+    <header>
+      <nav>
+        <h1>WhatsApp Relationship Analyzer</h1>
+      </nav>
+    </header>
+
+    <main>
+      <div class="container">
+        <div class="analysis-header">
+          <h2>Analysis Results</h2>
+          <a href="/" class="btn-secondary">Analyze Another Chat</a>
+        </div>
+
+        <!-- Relationship Classification -->
+        <div class="section">
+          <h3>Relationship Classification</h3>
+          <div class="classification-result">
+            <div class={"classification-badge #{@results.relationship_classification}"}>
+              <%= String.upcase(to_string(@results.relationship_classification)) %>
+            </div>
+            <p class="confidence">Confidence Score: <%= @results.relationship_score %>/100</p>
+          </div>
+        </div>
+
+        <!-- Metrics Overview -->
+        <div class="section">
+          <h3>Key Metrics</h3>
+          <div class="metrics-grid">
+            <WhatsAppAnalyzerWeb.AnalysisComponents.metric_card
+              title="Total Messages"
+              value={@results.total_messages}
+            />
+            <WhatsAppAnalyzerWeb.AnalysisComponents.metric_card
+              title="Total Days"
+              value={@results.total_days}
+            />
+            <WhatsAppAnalyzerWeb.AnalysisComponents.metric_card
+              title="Avg Messages/Day"
+              value={@results.avg_messages_per_day}
+            />
+            <WhatsAppAnalyzerWeb.AnalysisComponents.metric_card
+              title="Response Time"
+              value={"#{Float.round(@results.avg_response_time, 1)} min"}
+            />
+          </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="section">
+          <h3>Visualizations</h3>
+
+          <!-- Row 1: Sentiment Timeline & Word Frequency -->
+          <div class="chart-grid-2">
+            <div class="chart-container">
+              <h4>Sentiment Evolution</h4>
+              <%= raw VegaLiteHelper.embed_chart(@results.sentiment_timeline_chart, "sentiment-timeline-chart") %>
+            </div>
+            <div class="chart-container">
+              <h4>Top Words</h4>
+              <%= raw VegaLiteHelper.embed_chart(@results.word_frequency_chart, "word-frequency-chart") %>
+            </div>
+          </div>
+
+          <!-- Row 2: Conversation Flow & Sender Distribution -->
+          <div class="chart-grid-2">
+            <div class="chart-container">
+              <h4>Conversation Flow</h4>
+              <%= raw VegaLiteHelper.embed_chart(@results.conversation_flow_chart, "conversation-flow-chart") %>
+            </div>
+            <div class="chart-container">
+              <h4>Messages by Sender</h4>
+              <%= raw VegaLiteHelper.embed_chart(@results.sender_stats_chart, "sender-chart") %>
+            </div>
+          </div>
+
+          <!-- Row 3: Time Heatmap & Message Frequency -->
+          <div class="chart-grid-2">
+            <div class="chart-container">
+              <h4>Activity Heatmap</h4>
+              <%= raw VegaLiteHelper.embed_chart(@results.hourly_chart, "hourly-chart") %>
+            </div>
+            <div class="chart-container">
+              <h4>Message Frequency Over Time</h4>
+              <%= raw VegaLiteHelper.embed_chart(@results.daily_chart, "daily-chart") %>
+            </div>
+          </div>
+        </div>
+
+        <!-- Enhanced Sentiment Overview with Excerpts -->
+        <div class="section">
+          <h3>Sentiment Analysis</h3>
+
+          <div class="sentiment-cards">
+            <WhatsAppAnalyzerWeb.AnalysisComponents.sentiment_card
+              category={:romantic}
+              label="Romantic"
+              count={@results.sentiment.romantic_count}
+            />
+            <WhatsAppAnalyzerWeb.AnalysisComponents.sentiment_card
+              category={:intimacy}
+              label="Intimacy"
+              count={@results.sentiment.intimacy_count}
+            />
+            <WhatsAppAnalyzerWeb.AnalysisComponents.sentiment_card
+              category={:future_planning}
+              label="Future Planning"
+              count={@results.sentiment.future_planning_count}
+            />
+          </div>
+
+          <!-- Romantic Excerpts -->
+          <div id="romantic-excerpts" class="sentiment-excerpts">
+            <h4>Top Romantic Messages</h4>
+            <%= if length(@results.sentiment_excerpts.romantic) == 0 do %>
+              <p>No messages found in this category.</p>
+            <% else %>
+              <%= for excerpt <- @results.sentiment_excerpts.romantic do %>
+                <WhatsAppAnalyzerWeb.AnalysisComponents.excerpt_item excerpt={excerpt} />
+              <% end %>
+            <% end %>
+          </div>
+
+          <!-- Intimacy Excerpts -->
+          <div id="intimacy-excerpts" class="sentiment-excerpts">
+            <h4>Top Intimacy Messages</h4>
+            <%= if length(@results.sentiment_excerpts.intimacy) == 0 do %>
+              <p>No messages found in this category.</p>
+            <% else %>
+              <%= for excerpt <- @results.sentiment_excerpts.intimacy do %>
+                <WhatsAppAnalyzerWeb.AnalysisComponents.excerpt_item excerpt={excerpt} />
+              <% end %>
+            <% end %>
+          </div>
+
+          <!-- Future Planning Excerpts -->
+          <div id="future_planning-excerpts" class="sentiment-excerpts">
+            <h4>Top Future Planning Messages</h4>
+            <%= if length(@results.sentiment_excerpts.future_planning) == 0 do %>
+              <p>No messages found in this category.</p>
+            <% else %>
+              <%= for excerpt <- @results.sentiment_excerpts.future_planning do %>
+                <WhatsAppAnalyzerWeb.AnalysisComponents.excerpt_item excerpt={excerpt} />
+              <% end %>
+            <% end %>
+          </div>
+        </div>
+
+        <!-- Temporal Summary Timeline -->
+        <%= if @results.temporal_summary && length(@results.temporal_summary.periods) > 0 do %>
+          <div class="section">
+            <div class="temporal-timeline">
+              <div class="timeline-header">
+                <div>
+                  <h3>Temporal Summary</h3>
+                  <p>
+                    <%= @results.temporal_summary.total_days %> days of conversation segmented into
+                    <%= length(@results.temporal_summary.periods) %>
+                    <%= format_segmentation_type(@results.temporal_summary.segmentation_type) %> periods
+                  </p>
+                </div>
+                <div class="timeline-controls">
+                  <a href={"/results/#{@analysis_id}/download?format=txt"} class="btn-small">Download TXT</a>
+                  <a href={"/results/#{@analysis_id}/download?format=md"} class="btn-small">Download MD</a>
+                </div>
+              </div>
+
+              <div class="timeline-periods">
+                <%= for period <- @results.temporal_summary.periods do %>
+                  <% sentiment_total = period.sentiment_distribution.romantic +
+                                       period.sentiment_distribution.intimacy +
+                                       period.sentiment_distribution.future_planning %>
+                  <% max_sentiment = max(sentiment_total, 1) %>
+                  <% romantic_pct = Float.round(period.sentiment_distribution.romantic / max_sentiment * 100, 1) %>
+                  <% intimacy_pct = Float.round(period.sentiment_distribution.intimacy / max_sentiment * 100, 1) %>
+                  <% future_pct = Float.round(period.sentiment_distribution.future_planning / max_sentiment * 100, 1) %>
+                  <% activity_text = if period.highest_activity_date do
+                      "#{period.highest_activity_date.date} (#{period.highest_activity_date.count} msgs)"
+                    else
+                      "N/A"
+                    end %>
+
+                  <div class="period-card">
+                    <div class="period-header" onclick="togglePeriod(this)">
+                      <h4><%= period.period_key %></h4>
+                      <span class="period-toggle">▼</span>
+                    </div>
+                    <div class="period-content">
+                      <p>
+                        <strong>Period:</strong>
+                        <%= Calendar.strftime(period.period_start, "%Y-%m-%d") %> to
+                        <%= Calendar.strftime(period.period_end, "%Y-%m-%d") %>
+                      </p>
+
+                      <div class="period-metrics">
+                        <div class="period-metric">
+                          <div class="period-metric-label">Messages</div>
+                          <div class="period-metric-value"><%= period.message_count %></div>
+                        </div>
+                        <div class="period-metric">
+                          <div class="period-metric-label">Per Day</div>
+                          <div class="period-metric-value"><%= period.messages_per_day %></div>
+                        </div>
+                        <div class="period-metric">
+                          <div class="period-metric-label">Highest Activity</div>
+                          <div class="period-metric-value" style="font-size: 0.9rem;"><%= activity_text %></div>
+                        </div>
+                      </div>
+
+                      <div class="period-sentiment">
+                        <h5>Sentiment Distribution</h5>
+                        <div class="sentiment-bars">
+                          <div class="sentiment-bar">
+                            <div class="sentiment-bar-label">Romantic</div>
+                            <div class="sentiment-bar-fill">
+                              <div class="sentiment-bar-value" style={"width: #{romantic_pct}%;"}>
+                                <%= period.sentiment_distribution.romantic %>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="sentiment-bar">
+                            <div class="sentiment-bar-label">Intimacy</div>
+                            <div class="sentiment-bar-fill">
+                              <div class="sentiment-bar-value" style={"width: #{intimacy_pct}%;"}>
+                                <%= period.sentiment_distribution.intimacy %>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="sentiment-bar">
+                            <div class="sentiment-bar-label">Future Planning</div>
+                            <div class="sentiment-bar-fill">
+                              <div class="sentiment-bar-value" style={"width: #{future_pct}%;"}>
+                                <%= period.sentiment_distribution.future_planning %>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="period-themes">
+                        <h5>Dominant Themes</h5>
+                        <%= if Enum.empty?(period.dominant_themes) do %>
+                          <p>No dominant themes identified</p>
+                        <% else %>
+                          <div class="theme-tags">
+                            <%= for theme <- period.dominant_themes do %>
+                              <span class="theme-tag"><%= theme %></span>
+                            <% end %>
+                          </div>
+                        <% end %>
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Conversation Segments -->
+        <%= if length(@results.conversation_segments) > 0 do %>
+          <div class="section">
+            <h3>Conversation Segments</h3>
+            <p>Total Conversations: <%= length(@results.conversation_segments) %></p>
+
+            <!-- Button to generate ML summaries -->
+            <form action={"/results/#{@analysis_id}/generate_summaries"} method="post" style="margin: 1rem 0;">
+              <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()}>
+              <button type="submit" class="btn-primary" id="generate-summaries-btn">
+                Generate ML Summaries
+              </button>
+            </form>
+
+            <div class="segments-list">
+              <%= for segment <- Enum.take(@results.conversation_segments, 10) do %>
+                <div class="segment-card">
+                  <h4>Conversation #<%= segment.conversation_id %></h4>
+                  <p>
+                    <strong>Time:</strong>
+                    <%= Calendar.strftime(segment.start_time, "%Y-%m-%d %H:%M") %> -
+                    <%= Calendar.strftime(segment.end_time, "%Y-%m-%d %H:%M") %>
+                  </p>
+                  <p><strong>Messages:</strong> <%= segment.message_count %></p>
+                  <p><strong>Participants:</strong> <%= Enum.join(segment.participants, ", ") %></p>
+                  <%= if segment.text_summary do %>
+                    <div class="segment-summary">
+                      <%= segment.text_summary %>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+
+            <%= if length(@results.conversation_segments) > 10 do %>
+              <p class="note">
+                Showing first 10 of <%= length(@results.conversation_segments) %> conversations
+              </p>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    </main>
+
+    <script src="/js/app.js"></script>
+    <script>
+      // Poll for summary status if button was clicked
+      function pollSummaryStatus(analysisId) {
+        const interval = setInterval(() => {
+          fetch(`/results/${analysisId}/summary_status`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.status === 'completed') {
+                clearInterval(interval);
+                location.reload();
+              }
+            });
+        }, 2000);
+      }
+
+      // Attach to button if needed
+      const generateBtn = document.getElementById('generate-summaries-btn');
+      if (generateBtn) {
+        generateBtn.addEventListener('click', function() {
+          setTimeout(() => {
+            pollSummaryStatus('<%= @analysis_id %>');
+          }, 500);
+        });
+      }
+    </script>
+  </body>
+</html>

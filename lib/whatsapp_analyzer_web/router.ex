@@ -15,5 +15,8 @@ defmodule WhatsAppAnalyzerWeb.Router do
     get("/", PageController, :index)
     post("/analyze", AnalysisController, :create)
     get("/results/:id", AnalysisController, :show)
+    get("/results/:id/download", AnalysisController, :download_summary)
+    post("/results/:id/generate_summaries", AnalysisController, :generate_summaries)
+    get("/results/:id/summary_status", AnalysisController, :summary_status)
   end
 end

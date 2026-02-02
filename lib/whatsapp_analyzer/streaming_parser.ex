@@ -42,20 +42,8 @@ defmodule WhatsAppAnalyzer.StreamingParser do
   def parse_with_continuations(lines) do
     Stream.transform(lines, nil, fn line, acc ->
       case DateTimeParser.parse_line(line) do
-        {:ok, message} ->
-          if acc do
-            {[acc], message}
-          else
-            {[], message}
-          end
-
-        :error ->
-          if acc do
-            updated = %{acc | message: acc.message <> "\n" <> line}
-            {[], updated}
-          else
-            {[], nil}
-          end
+        {:ok, message} -> handle_new_message(acc, message)
+        :error -> handle_continuation_line(acc, line)
       end
     end)
     |> Stream.concat([:final])
@@ -66,6 +54,16 @@ defmodule WhatsAppAnalyzer.StreamingParser do
       message, _acc ->
         {[message], nil}
     end)
+  end
+
+  defp handle_new_message(nil, message), do: {[], message}
+  defp handle_new_message(acc, message), do: {[acc], message}
+
+  defp handle_continuation_line(nil, _line), do: {[], nil}
+
+  defp handle_continuation_line(acc, line) do
+    updated = %{acc | message: acc.message <> "\n" <> line}
+    {[], updated}
   end
 
   @spec messages_to_dataframe([message()]) :: DF.t()

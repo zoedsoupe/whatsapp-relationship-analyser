@@ -12,7 +12,7 @@ if config_env() == :prod do
 
   port = String.to_integer(System.get_env("PORT") || "4000")
 
-  config :whatsapp_analyser, WhatsAppAnalyzerWeb.Endpoint,
+  config :whatsapp_analyzer, WhatsAppAnalyzerWeb.Endpoint,
     http: [
       port: port,
       transport_options: [socket_opts: [:inet6]]

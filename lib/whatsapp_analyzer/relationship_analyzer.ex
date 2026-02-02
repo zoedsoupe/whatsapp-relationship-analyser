@@ -6,114 +6,8 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
   require Explorer.DataFrame, as: DF
   require Explorer.Series, as: S
 
-  @romantic_indicators [
-    # Portuguese terms
-    "amor",
-    "amo",
-    "amo você",
-    "te amo",
-    "amorzinho",
-    "meu amor",
-    "minha vida",
-    "querido",
-    "querida",
-    "saudade",
-    "sinto sua falta",
-    "beijo",
-    "beijinho",
-    "gostoso",
-    "gostosa",
-    "lindo",
-    "linda",
-    "tesão",
-    "sdds",
-    "apaixonado",
-    "apaixonada",
-    "namorar",
-    "namorado",
-    "namorada",
-    "carinho",
-
-    # English terms
-    "love",
-    "miss you",
-    "missing you",
-    "darling",
-    "babe",
-    "baby",
-    "honey",
-    "sweetheart",
-    "beautiful",
-    "gorgeous",
-    "handsome",
-    "kiss",
-    "kisses",
-    "boyfriend",
-    "girlfriend",
-    "passion",
-    "passionate",
-    "romantic",
-    "date"
-  ]
-
-  @future_planning [
-    # Portuguese
-    "planejar",
-    "futuro",
-    "morar",
-    "juntos",
-    "juntas",
-    "casa",
-    "viajar",
-    "férias",
-    "feriado",
-    "fim de semana",
-    "amanhã",
-    "semana que vem",
-
-    # English
-    "plan",
-    "future",
-    "live together",
-    "house",
-    "travel",
-    "vacation",
-    "holiday",
-    "weekend",
-    "tomorrow",
-    "next week"
-  ]
-
-  @intimacy_indicators [
-    # Portuguese
-    "sinto",
-    "sentir",
-    "sentimento",
-    "emoção",
-    "confiar",
-    "confio",
-    "segredo",
-    "pessoal",
-    "íntimo",
-    "íntima",
-    "vulnerável",
-    "abrir",
-    "coração",
-    "alma",
-
-    # English
-    "feel",
-    "feeling",
-    "emotion",
-    "trust",
-    "secret",
-    "personal",
-    "intimate",
-    "vulnerable",
-    "open up",
-    "heart",
-    "soul"
-  ]
+  alias WhatsAppAnalyzer.Config
+  alias WhatsAppAnalyzer.AnalysisHelpers
 
   @doc """
   Analyzes a DF with conversation data to extract relationship indicators.
@@ -130,9 +24,9 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
       response_patterns: analyze_response_patterns(df),
       conversation_initiation: analyze_conversation_initiation(df),
 
-      romantic_indicators: count_indicators(df, @romantic_indicators),
-      future_planning: count_indicators(df, @future_planning),
-      intimacy_indicators: count_indicators(df, @intimacy_indicators),
+      romantic_indicators: AnalysisHelpers.count_indicators(df, Config.romantic_indicators()),
+      future_planning: AnalysisHelpers.count_indicators(df, Config.future_planning()),
+      intimacy_indicators: AnalysisHelpers.count_indicators(df, Config.intimacy_indicators()),
 
       time_of_day_patterns: analyze_time_of_day(df),
       day_of_week_patterns: analyze_day_of_week(df),
@@ -174,7 +68,7 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
       end)
       |> Map.new()
 
-    romantic_count = count_indicators(df, @romantic_indicators)
+    romantic_count = AnalysisHelpers.count_indicators(df, Config.romantic_indicators())
 
     initiations = analyze_conversation_initiation(df)
 
@@ -287,44 +181,6 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
     }
   end
 
-  defp count_indicators(df, indicator_list) do
-    indicators_regex =
-      indicator_list
-      |> Enum.map(&Regex.escape/1)
-      |> Enum.join("|")
-      |> Regex.compile!("i")
-
-    indicator_counts =
-      df["message"]
-      |> S.transform(fn msg ->
-        msg = to_string(msg)
-        Regex.scan(indicators_regex, String.downcase(msg)) |> length()
-      end)
-
-    total_indicators = indicator_counts |> S.sum()
-
-    indicators_by_sender =
-      df
-      |> DF.put("indicator_count", indicator_counts)
-      |> DF.group_by("sender")
-      |> DF.summarise(count: sum(indicator_count))
-      |> DF.to_rows()
-      |> Enum.map(fn row -> {row["sender"], row["count"]} end)
-      |> Map.new()
-
-    messages_with_indicators =
-      indicator_counts
-      |> S.filter(_ > 0)
-      |> S.size()
-
-    indicator_percentage = messages_with_indicators / DF.n_rows(df) * 100
-
-    %{
-      total_indicators: total_indicators,
-      by_sender: indicators_by_sender,
-      percentage_of_messages: round(indicator_percentage)
-    }
-  end
 
   defp analyze_time_of_day(df) do
     time_periods = [
@@ -372,19 +228,9 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
   end
 
   defp analyze_day_of_week(df) do
-    day_names = %{
-      1 => "Monday",
-      2 => "Tuesday",
-      3 => "Wednesday",
-      4 => "Thursday",
-      5 => "Friday",
-      6 => "Saturday",
-      7 => "Sunday"
-    }
-
     day_name =
       df["day_of_week"]
-      |> S.transform(fn day -> Map.get(day_names, day) end)
+      |> S.transform(fn day -> Config.day_name(day) end)
 
     df_with_day_names = DF.put(df, "day_name", day_name)
 
@@ -406,10 +252,10 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
       |> Map.new()
 
     weekday_count =
-      Enum.sum(for day <- 1..5, do: Map.get(day_distribution, Map.get(day_names, day), 0))
+      Enum.sum(for day <- 1..5, do: Map.get(day_distribution, Config.day_name(day), 0))
 
     weekend_count =
-      Enum.sum(for day <- 6..7, do: Map.get(day_distribution, Map.get(day_names, day), 0))
+      Enum.sum(for day <- 6..7, do: Map.get(day_distribution, Config.day_name(day), 0))
 
     %{
       count_by_day: day_distribution,
@@ -424,29 +270,34 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
   end
 
   defp classify_relationship(df) do
-    romantic_score = count_indicators(df, @romantic_indicators)
-    intimacy_score = count_indicators(df, @intimacy_indicators)
-    future_planning_score = count_indicators(df, @future_planning)
+    components = calculate_classification_components(df)
+    weighted_score = calculate_weighted_score(components)
+    classification = classify_by_score(weighted_score)
+
+    %{
+      classification: classification,
+      score: round(weighted_score),
+      component_scores: %{
+        romantic_indicators: round(components.romantic_normalized),
+        intimacy: round(components.intimacy_normalized),
+        future_planning: round(components.future_normalized),
+        messaging_frequency: round(components.frequency_normalized),
+        response_time: components.response_normalized
+      }
+    }
+  end
+
+  defp calculate_classification_components(df) do
+    romantic_score = AnalysisHelpers.count_indicators(df, Config.romantic_indicators())
+    intimacy_score = AnalysisHelpers.count_indicators(df, Config.intimacy_indicators())
+    future_planning_score = AnalysisHelpers.count_indicators(df, Config.future_planning())
 
     %{messages_per_day: messages_per_day} = calculate_messaging_frequency(df)
-
-    # maybe use it later?
-    # _conversation_patterns = analyze_conversation_initiation(df)
     response_patterns = analyze_response_patterns(df)
-
-    weights = %{
-      romantic_indicators: 0.35,
-      intimacy: 0.25,
-      future_planning: 0.15,
-      messaging_frequency: 0.15,
-      response_time: 0.10,
-      conversation_initiation: 0.10
-    }
 
     romantic_normalized = min(romantic_score.percentage_of_messages * 5, 100)
     intimacy_normalized = min(intimacy_score.percentage_of_messages * 5, 100)
     future_normalized = min(future_planning_score.percentage_of_messages * 10, 100)
-
     frequency_normalized = min(messages_per_day / 20 * 100, 100)
 
     response_normalized =
@@ -456,31 +307,37 @@ defmodule WhatsAppAnalyzer.RelationshipAnalyzer do
         max(100 - response_patterns.overall_avg_minutes * 2, 0)
       end
 
-    weighted_score =
-      romantic_normalized * weights.romantic_indicators +
-        intimacy_normalized * weights.intimacy +
-        future_normalized * weights.future_planning +
-        frequency_normalized * weights.messaging_frequency +
-        response_normalized * weights.response_time
-
-    classification =
-      cond do
-        weighted_score >= 70 -> "Romantic"
-        weighted_score >= 40 -> "Close Friend"
-        weighted_score >= 20 -> "Friend"
-        true -> "Acquaintance"
-      end
-
     %{
-      classification: classification,
-      score: round(weighted_score),
-      component_scores: %{
-        romantic_indicators: round(romantic_normalized),
-        intimacy: round(intimacy_normalized),
-        future_planning: round(future_normalized),
-        messaging_frequency: round(frequency_normalized),
-        response_time: response_normalized
-      }
+      romantic_normalized: romantic_normalized,
+      intimacy_normalized: intimacy_normalized,
+      future_normalized: future_normalized,
+      frequency_normalized: frequency_normalized,
+      response_normalized: response_normalized
     }
+  end
+
+  defp calculate_weighted_score(components) do
+    weights = %{
+      romantic_indicators: 0.35,
+      intimacy: 0.25,
+      future_planning: 0.15,
+      messaging_frequency: 0.15,
+      response_time: 0.10
+    }
+
+    components.romantic_normalized * weights.romantic_indicators +
+      components.intimacy_normalized * weights.intimacy +
+      components.future_normalized * weights.future_planning +
+      components.frequency_normalized * weights.messaging_frequency +
+      components.response_normalized * weights.response_time
+  end
+
+  defp classify_by_score(weighted_score) do
+    cond do
+      weighted_score >= 70 -> "Romantic"
+      weighted_score >= 40 -> "Close Friend"
+      weighted_score >= 20 -> "Friend"
+      true -> "Acquaintance"
+    end
   end
 end

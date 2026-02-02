@@ -1,40 +1,70 @@
-defmodule WhatsAppAnalyzer.Parser do
+defmodule WhatsAppAnalyzer.StreamingParser do
   @moduledoc """
-  Parses WhatsApp chat export files into structured data.
+  True streaming parser for large WhatsApp chat files.
+
+  Processes files line-by-line using File.stream!/1 and processes
+  messages in chunks to handle memory constraints efficiently.
   """
+
+  require Explorer.DataFrame, as: DF
+
+  alias WhatsAppAnalyzer.DataProcessor
 
   @doc """
-  Parses a WhatsApp chat export file into a list of message maps.
-  
-  ## Parameters
-    - file_path: Path to the WhatsApp chat export file
-    
-  ## Returns
-    - List of message maps with keys:
-      - :datetime - NaiveDateTime
-      - :sender - String
-      - :message - String
+  Parses a file using streaming for memory efficiency.
+
+  Processes the file in chunks of 1000 messages, enhancing each chunk
+  and combining at the end.
   """
-  def parse_file(file_path) do
-    File.read!(file_path)
-    |> String.split("\n")
-    |> Enum.filter(&(String.length(&1) > 0))
-    |> parse_lines([])
+  def parse_file_stream(file_path, chunk_size \\ 1000) do
+    file_path
+    |> File.stream!()
+    |> Stream.map(&String.trim/1)
+    |> Stream.reject(&(&1 == ""))
+    |> parse_with_continuations()
+    |> Stream.chunk_every(chunk_size)
+    |> Stream.map(&messages_to_dataframe/1)
+    |> Stream.map(&DataProcessor.enhance_dataframe/1)
+    |> Enum.to_list()
+    |> combine_dataframes()
   end
 
-  defp parse_lines([], acc), do: Enum.reverse(acc)
-  defp parse_lines([line | rest], acc) do
-    case parse_line(line) do
-      {:ok, message} -> parse_lines(rest, [message | acc])
-      :error ->
-        # If line doesn't match pattern, try to append to previous message (multiline handling)
-        case acc do
-          [prev | tail] ->
-            updated = %{prev | message: prev.message <> "\n" <> line}
-            parse_lines(rest, [updated | tail])
-          [] -> parse_lines(rest, acc)
-        end
-    end
+  @doc """
+  Parses lines with stateful multiline message handling.
+
+  Uses Stream.transform/3 to maintain state across line processing,
+  accumulating continuation lines into the previous message.
+  """
+  def parse_with_continuations(lines) do
+    Stream.transform(lines, nil, fn line, acc ->
+      case parse_line(line) do
+        {:ok, message} ->
+          # New message found
+          if acc do
+            {[acc], message}
+          else
+            {[], message}
+          end
+
+        :error ->
+          # Continuation line - append to accumulator
+          if acc do
+            updated = %{acc | message: acc.message <> "\n" <> line}
+            {[], updated}
+          else
+            # No previous message, skip this line
+            {[], nil}
+          end
+      end
+    end)
+    |> Stream.concat([:final])
+    |> Stream.transform(nil, fn
+      :final, acc ->
+        if acc, do: {[acc], nil}, else: {[], nil}
+
+      message, _acc ->
+        {[message], nil}
+    end)
   end
 
   defp parse_line(line) do
@@ -45,10 +75,6 @@ defmodule WhatsAppAnalyzer.Parser do
     line = String.replace(line, <<0xE2, 0x80, 0x89>>, " ")  # U+2009
 
     # Match formats with and without seconds, with or without AM/PM
-    # [DD/MM/YY, HH:MM:SS AM/PM] Sender: Message
-    # [DD/MM/YY, HH:MM AM/PM] Sender: Message
-    # [DD/MM/YY, HH:MM:SS] Sender: Message
-    # [DD/MM/YY, HH:MM] Sender: Message
     date_time_pattern = ~r/\[(\d{2}\/\d{2}\/\d{2,4}), (\d{1,2}:\d{2}(?::\d{2})?(?: [AP]M)?)\] ([^:]+): (.+)/
 
     case Regex.run(date_time_pattern, line) do
@@ -58,11 +84,12 @@ defmodule WhatsAppAnalyzer.Parser do
           sender: String.trim(sender),
           message: String.trim(message)
         }}
+
       _ ->
-        # Try to handle system messages or other non-standard formats
+        # Try to handle system messages
         if String.contains?(line, "[") && String.contains?(line, "]") do
-          # It's likely a system message
           system_pattern = ~r/\[(\d{2}\/\d{2}\/\d{2,4}), (\d{1,2}:\d{2}(?::\d{2})?(?: [AP]M)?)\] (.+)/
+
           case Regex.run(system_pattern, line) do
             [_, date, time, system_message] ->
               {:ok, %{
@@ -70,10 +97,10 @@ defmodule WhatsAppAnalyzer.Parser do
                 sender: "SYSTEM",
                 message: String.trim(system_message)
               }}
+
             _ -> :error
           end
         else
-          # It might be a continuation of a previous message
           :error
         end
     end
@@ -81,13 +108,11 @@ defmodule WhatsAppAnalyzer.Parser do
 
   defp parse_datetime(date, time) do
     try do
-      # Handle both date formats: DD/MM/YY and DD/MM/YYYY
       [day, month, year_str] = String.split(date, "/")
 
       day = String.to_integer(day)
       month = String.to_integer(month)
 
-      # Adjust year if needed (e.g., "22" -> 2022)
       year = case String.length(year_str) do
         2 -> 2000 + String.to_integer(year_str)
         4 -> String.to_integer(year_str)
@@ -103,7 +128,6 @@ defmodule WhatsAppAnalyzer.Parser do
           {time, nil}
         end
 
-      # Handle time both with and without seconds
       time_parts = String.split(time_str, ":")
       {hour, minute, second} = case length(time_parts) do
         2 ->
@@ -124,7 +148,6 @@ defmodule WhatsAppAnalyzer.Parser do
           hour
       end
 
-      # Validate datetime with fallback
       case NaiveDateTime.new(year, month, day, hour, minute, second) do
         {:ok, datetime} -> datetime
         {:error, _} -> ~N[1970-01-01 00:00:00]
@@ -132,5 +155,29 @@ defmodule WhatsAppAnalyzer.Parser do
     rescue
       _ -> ~N[1970-01-01 00:00:00]
     end
+  end
+
+  defp messages_to_dataframe(messages) do
+    # Reject SYSTEM messages
+    messages = Enum.reject(messages, & &1.sender == "SYSTEM")
+
+    if Enum.empty?(messages) do
+      # Return empty DataFrame with correct schema
+      DF.new(datetime: [], sender: [], message: [])
+    else
+      DF.new(
+        datetime: Enum.map(messages, & &1.datetime),
+        sender: Enum.map(messages, & &1.sender),
+        message: Enum.map(messages, & &1.message)
+      )
+    end
+  end
+
+  defp combine_dataframes([]), do: DF.new(datetime: [], sender: [], message: [])
+  defp combine_dataframes([single]), do: single
+  defp combine_dataframes(dfs) do
+    Enum.reduce(dfs, fn df, acc ->
+      DF.concat_rows(acc, df)
+    end)
   end
 end

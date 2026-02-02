@@ -42,11 +42,15 @@ defmodule WhatsAppAnalyzer.DataProcessor do
   Enhances a DF with additional analysis features.
   """
   def enhance_dataframe(df) do
-    df
-    |> add_time_features()
-    |> add_message_length()
-    |> add_response_time()
-    |> add_conversation_markers()
+    if DF.n_rows(df) == 0 do
+      df
+    else
+      df
+      |> add_time_features()
+      |> add_message_length()
+      |> add_response_time()
+      |> add_conversation_markers()
+    end
   end
 
   defp add_time_features(df) do
@@ -83,74 +87,64 @@ defmodule WhatsAppAnalyzer.DataProcessor do
   end
 
   defp add_response_time(df) do
-    sorted_df = DF.sort_by(df, datetime)
-    
-    timestamps = sorted_df["datetime"]
-      |> S.transform(fn dt -> 
-        NaiveDateTime.diff(dt, ~N[1970-01-01 00:00:00])
-      end)
-      |> S.to_enum
-      |> Enum.to_list
-    
-    senders = sorted_df["sender"] |> S.to_enum |> Enum.to_list
-    
-    # yeah i know, ugly, horrendous, but i'm lazy
-    {response_times, _} = Enum.zip(Enum.with_index(timestamps), Enum.with_index(senders))
-      |> Enum.reduce({[], nil}, fn {{current_ts, idx}, {current_sender, _}}, {acc, prev} ->
-        response_time = case prev do
-          {prev_ts, prev_sender, _prev_idx} ->
-            if current_sender != prev_sender do
-              min((current_ts - prev_ts) / 60, 1440)
-            else
-              nil
-            end
-          nil -> nil
-        end
-        
-        {[{idx, response_time} | acc], {current_ts, current_sender, idx}}
-      end)
-    
-    response_time_map = Map.new(response_times)
-    response_time_series = S.from_list(
-      Enum.map(0..(DF.n_rows(sorted_df) - 1), fn idx ->
-        Map.get(response_time_map, idx)
-      end)
-    )
-    
-    DF.put(sorted_df, "response_time_minutes", response_time_series)
+    if DF.n_rows(df) == 0 do
+      DF.put(df, "response_time_minutes", S.from_list([]))
+    else
+      sorted_df = DF.sort_by(df, datetime)
+
+      response_times = sorted_df
+        |> DF.to_rows()
+        |> Enum.chunk_every(2, 1, :discard)
+        |> Enum.map(fn [prev, curr] ->
+          if prev["sender"] != curr["sender"] do
+            NaiveDateTime.diff(curr["datetime"], prev["datetime"]) / 60 |> min(1440)
+          else
+            nil
+          end
+        end)
+        |> then(&[nil | &1])
+
+      DF.put(sorted_df, "response_time_minutes", S.from_list(response_times))
+    end
   end
 
   defp add_conversation_markers(df) do
-    sorted_df = DF.sort_by(df, datetime)
-    
-    timestamps = sorted_df["datetime"]
-      |> S.to_list()
-    
-    time_gaps = Enum.zip([nil | timestamps], timestamps)
-      |> Enum.map(fn {prev, current} ->
-        case prev do
-          nil -> nil
-          _ -> NaiveDateTime.diff(current, prev) / 60
-        end
+    if DF.n_rows(df) == 0 do
+      df
+      |> DF.put("new_conversation", S.from_list([]))
+      |> DF.put("conversation_id", S.from_list([]))
+    else
+      sorted_df = DF.sort_by(df, datetime)
+
+      timestamps = sorted_df["datetime"]
+        |> S.to_list()
+
+      time_gaps = Enum.zip([nil | timestamps], timestamps)
+        |> Enum.map(fn {prev, current} ->
+          case prev do
+            nil -> nil
+            _ -> NaiveDateTime.diff(current, prev) / 60
+          end
+        end)
+
+      conversation_markers = Enum.map(time_gaps, fn
+        nil -> 1  # First message is always a new conversation
+        gap when gap > 60 -> 1  # New conversation after 1 hour gap
+        _ -> 0  # Continuation of existing conversation
       end)
-    
-    conversation_markers = Enum.map(time_gaps, fn
-      nil -> 1  # First message is always a new conversation
-      gap when gap > 60 -> 1  # New conversation after 1 hour gap
-      _ -> 0  # Continuation of existing conversation
-    end)
-    
-    {conversation_ids, _} = Enum.reduce(conversation_markers, {[], 1}, fn
-      marker, {acc, current_id} ->
-        if marker == 1 do
-          {[current_id + 1 | acc], current_id + 1}
-        else
-          {[current_id | acc], current_id}
-        end
-    end)
-    
-    df = DF.put(sorted_df, "new_conversation", S.from_list(conversation_markers))
-    DF.put(df, "conversation_id", S.from_list(Enum.reverse(conversation_ids)))
+
+      {conversation_ids, _} = Enum.reduce(conversation_markers, {[], 1}, fn
+        marker, {acc, current_id} ->
+          if marker == 1 do
+            {[current_id + 1 | acc], current_id + 1}
+          else
+            {[current_id | acc], current_id}
+          end
+      end)
+
+      df = DF.put(sorted_df, "new_conversation", S.from_list(conversation_markers))
+      DF.put(df, "conversation_id", S.from_list(Enum.reverse(conversation_ids)))
+    end
   end
 
   defp combine_dataframes(dfs) do
